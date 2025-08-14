@@ -1,0 +1,264 @@
+require('dotenv').config();
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const P = require('pino');
+const axios = require('axios');
+
+const ADMIN_NUMBER = '4915563691188@s.whatsapp.net';
+let players = {};
+let gameState = {};
+let sock;
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function istFrage(text) {
+    const lower = text.toLowerCase();
+    return text.endsWith('?') ||
+        lower.startsWith('ist') ||
+        lower.startsWith('hat') ||
+        lower.startsWith('lebt') ||
+        lower.startsWith('gibt') ||
+        lower.startsWith('kann') ||
+        lower.startsWith('wer') ||
+        lower.startsWith('was') ||
+        lower.startsWith('wo') ||
+        lower.startsWith('wann');
+}
+
+async function generiereGeheimnisMitGPT(thema) {
+    try {
+        const themaText = {
+            '1': 'ein einfaches Rätsel',
+            '2': 'ein berühmter Spieler oder eine Mannschaft',
+            '3': 'ein Begriff aus dem Straßenverkehr',
+            '4': 'eine bekannte Automarke',
+            '5': 'ein beliebtes Videospiel'
+        };
+
+        const response = await axios.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            {
+                model: 'openai/gpt-4o',
+                messages: [
+                    {
+                        role: 'user',
+                        content: `Wähle bitte ${themaText[thema]} als Geheimnis. Gib nur ein kurzes Stichwort zurück – keine Erklärung.`
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 30
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        const content = response?.data?.choices?.[0]?.message?.content?.trim();
+        return content || null;
+    } catch (error) {
+        console.error('❌ Fehler beim Generieren:', error?.response?.data || error.message);
+        return null;
+    }
+}
+
+async function frageGPTAnalyse(frage, geheimnis, istFrageUser = false) {
+    try {
+        let prompt;
+
+        if (istFrageUser) {
+            prompt = `Das Geheimnis ist "${geheimnis}". Der Spieler hat gefragt: "${frage}". Antworte bitte mit einem kleinen Hinweis, nicht direkt mit Ja/Nein.`;
+        } else {
+            prompt = `Das Geheimnis ist "${geheimnis}". Der Spieler glaubt, es ist: "${frage}". Wenn das korrekt ist, schreibe:\n🎉 Richtig geraten!\nWenn es falsch ist, schreibe:\n❌ Das stimmt leider nicht.`;
+        }
+
+        const res = await axios.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            {
+                model: 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+                max_tokens: 60
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        return res.data.choices[0].message.content.trim();
+    } catch (error) {
+        return 'Ich konnte das nicht analysieren.';
+    }
+}
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+
+    sock = makeWASocket({
+        logger: P({ level: 'silent' }),
+        auth: state,
+        printQRInTerminal: true,
+        browser: ['Ubuntu', 'Chrome', '22.04']
+    });
+
+    sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+        if (qr) {
+            console.log("📷 Bitte QR-Code scannen:");
+            qrcode.generate(qr, { small: true });
+        }
+
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) startBot();
+        }
+
+        if (connection === 'open') {
+            console.log('✅ Bot ist verbunden mit WhatsApp');
+            await sock.sendMessage(ADMIN_NUMBER, { text: '🤖 Bot ist bereit!' });
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+sock.ev.on('messages.upsert', async (m) => {
+        try {
+            const msg = m.messages[0];
+            if (!msg.message || msg.key.fromMe || !msg.message.conversation) return;
+
+            const sender = msg.key.remoteJid;
+            const text = msg.message.conversation?.trim();
+            if (!text) return;
+
+            if (!players[sender]) {
+                players[sender] = { score: 0, thema: null, geheimnis: null, tries: 0, modus: null };
+            }
+
+            const player = players[sender];
+            const state = gameState[sender] ||= { stage: 'start' };
+
+            if (text.toLowerCase() === 'spiel starten') {
+                await sock.sendMessage(sender, {
+                    text: `🎮 Willkommen beim Spiel: *Wer weiß das Geheimnis?*\nHeute wird eine spannende Runde gestartet. Bist du bereit für die Herausforderung?`
+                });
+
+                await sock.sendMessage(sender, {
+                    text: `🎯 Wähle ein Thema (schreib 1 bis 5):\n1️⃣ Rätselspiel\n2️⃣ Spieler oder Team erraten\n3️⃣ Spiel zum Straßenverkehr\n4️⃣ Automarke verraten\n5️⃣ Videospiel erraten`
+                });
+
+                state.stage = 'themaWählen';
+                return;
+            }
+
+            if (state.stage === 'themaWählen' && ['1', '2', '3', '4', '5'].includes(text)) {
+                player.thema = text;
+                state.stage = 'modusWählen';
+                await sock.sendMessage(sender, {
+                    text: `🧠 Möchtest du gegen *dein Handy* spielen oder mit der *Gruppe*?\n1️⃣ Gegen Handy\n2️⃣ Gruppe (schreib 1 oder 2)`
+                });
+                return;
+            }
+
+            if (state.stage === 'modusWählen' && ['1', '2'].includes(text)) {
+                player.modus = text === '1' ? 'handy' : 'gruppe';
+                state.stage = 'geheimnisWirdGeneriert';
+                await sock.sendMessage(sender, { text: `🤖 Handy denkt nach...` });
+
+                const geheimnis = await generiereGeheimnisMitGPT(player.thema);
+                if (!geheimnis) {
+                    await sock.sendMessage(sender, { text: `⚠️ Fehler beim Generieren. Versuche es erneut.` });
+                    return;
+                }
+
+                player.geheimnis = geheimnis;
+                player.tries = 0;
+                state.stage = 'raten';
+
+                const hinweis = await frageGPTAnalyse("Gib mir einen allgemeinen Hinweis, der beim Erraten hilft, aber nicht das Geheimnis verrät.", geheimnis, true);
+                await sock.sendMessage(sender, {
+                    text: `💡 Allgemeiner Hinweis vom Bot: ${hinweis}`
+                });
+
+                await sock.sendMessage(sender, {
+                    text: `🕵️‍♂️ Das Geheimnis wurde gespeichert.\n🧩 Hinweis: Wenn du nicht sicher bist, stelle lieber eine Frage – ein falscher Versuch kostet -3 Punkte.`
+                });
+
+                const ersteFrage = await frageGPTAnalyse("Stelle eine gute Einstiegsfrage", geheimnis, true);
+                await sock.sendMessage(sender, { text: `🤖 *Mein Handy fragt:*\n🗣️ ${ersteFrage}` });
+
+                await sock.sendMessage(sender, { text: `🎯 *Du bist dran!* Stell deine Frage oder rate das Geheimnis.` });
+                return;
+            }
+
+            if (state.stage === 'raten') {
+                player.tries += 1;
+                const istFrageUser = istFrage(text);
+                const antwort = await frageGPTAnalyse(text, player.geheimnis, istFrageUser);
+
+                await sock.sendMessage(sender, { text: `🤖 *Bot antwortet:* ${antwort}` });
+
+                if (!istFrageUser) {
+                    if (antwort.includes('🎉')) {
+                        player.score += 10;
+                        state.stage = 'gewonnen';
+                        await sock.sendMessage(sender, {
+                            text: `🏆 *Richtig geraten!*\n+10 Punkte\n📊 Punktestand: ${player.score}`
+                        });
+                        await sock.sendMessage(sender, { text: `🕹️ Schreibe *spiel starten*, um neu zu spielen.` });
+                        return;
+                    } else {
+                        player.score -= 3;
+                        await sock.sendMessage(sender, {
+                            text: `❌ *Falsch geraten.* -3 Punkte\n📉 Punktestand: ${player.score}`
+                        });
+
+                        if (player.tries >= 5) {
+                            state.stage = 'vetoAngeboten';
+                            await sock.sendMessage(sender, {
+                                text: `🚨 *5 Fehlversuche erreicht!*\n❓ *Veto einsetzen?*\n💡 70% Erfolg – aber -5 Punkte bei Fehlschlag.\n✍️ Antworte mit *veto*, um es zu versuchen.`
+                            });
+                            return;
+                        }
+                    }
+                }
+
+                const gegenfrage = await frageGPTAnalyse("Stelle eine clevere Gegenfrage, um das Geheimnis zu erraten", player.geheimnis, true);
+                await sock.sendMessage(sender, {
+                    text: `🤖 *Mein Handy fragt:*\n🗣️ ${gegenfrage}`
+                });
+
+                await sock.sendMessage(sender, {
+                    text: `🧠 *Hinweis:* Besser eine Frage stellen, wenn du nicht sicher bist.\n🎯 *Du bist dran!*`
+                });
+            }
+
+            if (state.stage === 'vetoAngeboten' && text.toLowerCase() === 'veto') {
+                const erfolg = Math.random() < 0.7;
+                if (erfolg) {
+                    player.score += 10;
+                    state.stage = 'gewonnen';
+                    await sock.sendMessage(sender, {
+                        text: `✅ *Veto erfolgreich!*\n🎉 Du hast das Geheimnis automatisch gelöst!\n+10 Punkte\n📊 Punktestand: ${player.score}`
+                    });
+                } else {
+                    player.score -= 5;
+                    state.stage = 'verloren';
+                    await sock.sendMessage(sender, {
+                        text: `❌ *Veto fehlgeschlagen!*\n-5 Punkte\n📉 Punktestand: ${player.score}\n💔 Spiel verloren.`
+                    });
+                }
+                await sock.sendMessage(sender, { text: `🕹️ Schreibe *spiel starten*, um neu zu starten.` });
+            }
+        } catch (err) {
+            console.error('❌ Fehler im Bot:', err);
+        }
+    });
+}
+
+startBot();
