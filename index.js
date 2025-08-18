@@ -24,7 +24,7 @@ async function startSock() {
 
     // 👋 Begrüßung
     if (text.toLowerCase() === 'hallo diginetz') {
-      await sock.sendMessage(sender, { text: '👋 Hallo DigiNetz!' });
+      await sock.sendMessage(sender, { text: '👋 Hallo DigiNetz! Bitte wähle deine Sprache:\n1️⃣ Deutsch\n2️⃣ Arabisch\n3️⃣ Türkisch' });
     }
 
     // ▶️ Startbefehl
