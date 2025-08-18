@@ -1,16 +1,14 @@
 {
-  "name": "diginetz-whatsapp-bot",
+  "name": "whatsapp-bot",
   "version": "1.0.0",
-  "description": "DigiNetz WhatsApp Bot mit GPT & Rechnungssystem",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "author": "DigiNetz",
-  "license": "MIT",
   "dependencies": {
+    "@hapi/boom": "^10.0.0",
     "@whiskeysockets/baileys": "^6.7.18",
-    "dotenv": "^16.4.5",
-    "pino": "^8.17.0"
+    "dotenv": "^16.0.3",
+    "pino": "^8.0.0"
   }
 }
