@@ -1,51 +1,53 @@
-require('dotenv').config();
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const P = require('pino');
+require("dotenv").config();
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const pino = require("pino");
 
-// ✅ WhatsApp Verbindung
 async function startSock() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    console.log(`Using WA version ${version.join(".")} (latest: ${isLatest})`);
 
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: true,
-    logger: P({ level: 'silent' }),
-  });
+    const sock = makeWASocket({
+        version,
+        logger: pino({ level: "silent" }),
+        printQRInTerminal: true,
+        auth: state
+    });
 
-  // ✅ Nachricht empfangen
-  sock.ev.on('messages.upsert', async (m) => {
-    const msg = m.messages[0];
-    if (!msg.message || msg.key.fromMe) return;
+    sock.ev.on("creds.update", saveCreds);
 
-    const sender = msg.key.remoteJid;
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+    sock.ev.on("connection.update", (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === "close") {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            console.log("Connection closed. Reconnecting...");
+            startSock(); // إعادة الاتصال تلقائيًا
+        } else if (connection === "open") {
+            console.log("✅ Bot ist verbunden mit WhatsApp");
+        }
+    });
 
-    console.log('📩 Nachricht:', text);
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+        if (type !== "notify") return;
 
-    // 👋 Begrüßung
-    if (text.toLowerCase() === 'hallo diginetz') {
-      await sock.sendMessage(sender, { text: '👋 Hallo DigiNetz! Bitte wähle deine Sprache:\n1️⃣ Deutsch\n2️⃣ Arabisch\n3️⃣ Türkisch' });
-    }
+        const msg = messages[0];
+        const from = msg.key.remoteJid;
+        const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
 
-    // ▶️ Startbefehl
-    else if (text.toLowerCase() === 'start') {
-      await sock.sendMessage(sender, { text: '📦 Dein Bot ist startklar!' });
-    }
-  });
+        if (!from || msg.key.fromMe) return;
 
-  // 🔁 Verbindung speichern
-  sock.ev.on('creds.update', saveCreds);
+        const text = body.trim().toLowerCase();
 
-  // ❌ Fehlerbehandlung
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'close') {
-      const reason = lastDisconnect?.error?.output?.statusCode;
-      console.log('❌ Verbindung getrennt:', reason);
-    } else if (connection === 'open') {
-      console.log('✅ Verbindung erfolgreich aufgebaut');
-    }
-  });
+        if (text === "start") {
+            await sock.sendMessage(from, { text: "👋 Hallo DigiNetz!\nBitte wähle deine Sprache:\n1️⃣ Deutsch\n2️⃣ Arabisch\n3️⃣ Türkisch" });
+        }
+
+        if (text === "hallo diginetz") {
+            await sock.sendMessage(from, { text: "👋 Willkommen! Was möchtest du tun?" });
+        }
+
+        // أضف المزيد من الأوامر هنا حسب الحاجة
+    });
 }
 
 startSock();
