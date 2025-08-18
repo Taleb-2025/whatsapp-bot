@@ -5,10 +5,13 @@
   "scripts": {
     "start": "node index.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.7.18",
-    "dotenv": "^16.4.1",
+    "dotenv": "^17.0.1",
     "pino": "^9.7.0",
     "qrcode-terminal": "^0.12.0"
   }
