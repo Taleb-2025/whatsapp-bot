@@ -60,12 +60,71 @@ async function startBot() {
         const sender = msg.key.remoteJid;
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
+        if (!text) return;
+        const input = text.trim().toLowerCase();
+
         console.log(`📩 Nachricht von ${sender}: ${text}`);
 
-        if (text?.toLowerCase().includes('start')) {
+        // Startnachricht
+        if (input === 'start' || input === 'hallo diginetz') {
             await sock.sendMessage(sender, {
-                text: `👋 Willkommen bei DigiNetz über Railway!`
+                text: `👋 Willkommen bei *DigiNetz*!
+
+Unsere Plattform bietet einfache und schnelle digitale Vorlagen ✅
+
+Bitte wähle eine Option:
+1️⃣ Rechnung Kleingewerbe
+2️⃣ Rechnung mit MwSt
+3️⃣ Privat-Ausgabe
+4️⃣ Kontakt
+
+💡 *Tipp*: Speicher diesen Kontakt als *DigiNetz*, um alle Dienste einfacher zu nutzen.`
             });
+            return;
+        }
+
+        // Optionen
+        switch (input) {
+            case '1':
+                await sock.sendMessage(sender, {
+                    text: `🧾 *Kleingewerbe Rechnung*
+
+Erstelle deine Rechnung hier:
+👉 https://diginetz-template.com/kleingewerbe`
+                });
+                break;
+
+            case '2':
+                await sock.sendMessage(sender, {
+                    text: `📄 *Rechnung mit MwSt (19%)*
+
+Jetzt starten:
+👉 https://diginetz-template.com/unternehmen`
+                });
+                break;
+
+            case '3':
+                await sock.sendMessage(sender, {
+                    text: `👤 *Privat-Ausgabe Formular*
+
+Deine privaten Ausgaben erfassen:
+👉 https://diginetz-template.com/privat-ausgabe`
+                });
+                break;
+
+            case '4':
+                await sock.sendMessage(sender, {
+                    text: `📞 *Kontakt & Hilfe*
+
+Schreib uns direkt:
+👉 https://wa.me/491234567890`
+                });
+                break;
+
+            default:
+                await sock.sendMessage(sender, {
+                    text: `❗ *Ungültige Auswahl*. Bitte 1–4 tippen oder einen Button verwenden.`
+                });
         }
     });
 }
