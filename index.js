@@ -1,40 +1,43 @@
 require('dotenv').config();
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
-const P = require('pino');
 const fs = require('fs');
 
-async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+// قراءة الاعتماديات من متغيرات البيئة على Railway
+fs.writeFileSync('./creds.json', Buffer.from(process.env.CREDS_JSON, 'base64').toString('utf-8'));
+fs.writeFileSync('./keys.json', Buffer.from(process.env.KEYS_JSON, 'base64').toString('utf-8'));
+
+const { state, saveState } = useSingleFileAuthState('./creds.json');
+
+async function startBot() {
   const sock = makeWASocket({
-    logger: P({ level: 'silent' }),
-    printQRInTerminal: true,
-    auth: state
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'close') {
-      const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      if (shouldReconnect) connectToWhatsApp();
-    } else if (connection === 'open') {
-      console.log('✅ Verbunden mit WhatsApp');
-    }
+    auth: state,
+    printQRInTerminal: false,
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     const msg = messages[0];
     if (!msg.message || msg.key.fromMe) return;
 
-    const from = msg.key.remoteJid;
-    const body = msg.message.conversation || msg.message.extendedTextMessage?.text;
+    const sender = msg.key.remoteJid;
+    const messageContent = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
-    if (body === 'start') {
-      await sock.sendMessage(from, { text: '👋 Hallo! Dein Bot ist aktiv.' });
+    if (messageContent?.toLowerCase().includes("start")) {
+      await sock.sendMessage(sender, { text: "👋 Hallo DigiNetz! Bitte wähle deine Sprache:\n1️⃣ Deutsch\n2️⃣ Arabisch\n3️⃣ Türkisch" });
+    }
+  });
+
+  sock.ev.on('creds.update', saveState);
+
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === 'close') {
+      const shouldReconnect = (lastDisconnect.error = Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+      if (shouldReconnect) startBot();
+    } else if (connection === 'open') {
+      console.log("✅ Bot ist verbunden mit WhatsApp");
     }
   });
 }
 
-connectToWhatsApp();
+startBot();
