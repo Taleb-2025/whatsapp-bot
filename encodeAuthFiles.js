@@ -1,14 +1,19 @@
 const fs = require('fs');
+const path = require('path');
 
-function encodeFileToBase64(filePath) {
-    const data = fs.readFileSync(filePath, 'utf8');
-    return Buffer.from(data).toString('base64');
-}
+const credsPath = path.join(__dirname, 'auth_info_baileys', 'creds.json');
+const keysPath = path.join(__dirname, 'auth_info_baileys', 'keys.json');
 
-const credsBase64 = encodeFileToBase64('creds.json');
-const keysBase64 = encodeFileToBase64('keys.json');
+const encodeFile = (filePath) => {
+  const content = fs.readFileSync(filePath);
+  return Buffer.from(content).toString('base64');
+};
 
-console.log('=== BASE64 CREDS ===');
+const credsBase64 = encodeFile(credsPath);
+const keysBase64 = encodeFile(keysPath);
+
+console.log('\n----- CREDS_JSON -----\n');
 console.log(credsBase64);
-console.log('\n=== BASE64 KEYS ===');
+
+console.log('\n----- KEYS_JSON -----\n');
 console.log(keysBase64);
