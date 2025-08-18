@@ -41,7 +41,6 @@ async function startBot() {
 
             const sender = msg.key.remoteJid;
 
-            // 🧠 Text erkennen
             let text = '';
             if (msg.message.conversation) text = msg.message.conversation;
             else if (msg.message.extendedTextMessage?.text) text = msg.message.extendedTextMessage.text;
@@ -52,21 +51,17 @@ async function startBot() {
             text = text.trim().toLowerCase();
             console.log("Empfangen:", text);
 
-            // 📍 Menü starten
             if (text === 'start' || text === 'hallo' || text === 'zurück') {
-                // 1. Begrüßung
                 await sock.sendMessage(sender, {
                     text: `👋 Willkommen bei *DigiNetz!*\n\nUnsere Plattform bietet schnelle und einfache Dienstleistungen für digitale Vorlagen ✅\n\nBitte wähle eine Option:`
                 });
 
-                // 2. Tipp nach 5 Sekunden
                 setTimeout(async () => {
                     await sock.sendMessage(sender, {
                         text: `💡 *Tipp:* Speichere diesen Kontakt als DigiNetz, um alle Dienste einfacher zu nutzen.`
                     });
                 }, 5000);
 
-                // 3. Kontaktkarte nach 7 Sekunden
                 setTimeout(async () => {
                     await sock.sendMessage(sender, {
                         contacts: {
@@ -86,7 +81,6 @@ END:VCARD`
                     });
                 }, 7000);
 
-                // 4. Template-Optionen nach 12 Sekunden
                 setTimeout(async () => {
                     await sock.sendMessage(sender, {
                         text:
@@ -114,7 +108,6 @@ END:VCARD`
                 return;
             }
 
-            // 📍 Antwort auf Menü-Auswahl
             if (userState[sender]?.stage === 'main_menu') {
                 const antworten = {
                     '1': {
