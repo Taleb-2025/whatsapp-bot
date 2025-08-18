@@ -1,43 +1,58 @@
 require('dotenv').config();
-const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    fetchLatestBaileysVersion
+} = require('@whiskeysockets/baileys');
+
 const { Boom } = require('@hapi/boom');
+const P = require('pino');
 const fs = require('fs');
 
-// قراءة الاعتماديات من متغيرات البيئة على Railway
-fs.writeFileSync('./creds.json', Buffer.from(process.env.CREDS_JSON, 'base64').toString('utf-8'));
-fs.writeFileSync('./keys.json', Buffer.from(process.env.KEYS_JSON, 'base64').toString('utf-8'));
+// إعداد المتغيرات البيئية
+const CREDS_PATH = process.env.CREDS_JSON || './creds.json';
+const KEYS_PATH = process.env.KEYS_JSON || './keys.json';
 
-const { state, saveState } = useSingleFileAuthState('./creds.json');
-
+// تحميل الحالة المخزنة (الاعتماد على ملفات الجلسة المشفرة)
 async function startBot() {
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-  });
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_diginetz');
 
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
+    const sock = makeWASocket({
+        logger: P({ level: 'silent' }),
+        printQRInTerminal: true,
+        auth: state
+    });
 
-    const sender = msg.key.remoteJid;
-    const messageContent = msg.message.conversation || msg.message.extendedTextMessage?.text;
+    sock.ev.on('creds.update', saveCreds);
 
-    if (messageContent?.toLowerCase().includes("start")) {
-      await sock.sendMessage(sender, { text: "👋 Hallo DigiNetz! Bitte wähle deine Sprache:\n1️⃣ Deutsch\n2️⃣ Arabisch\n3️⃣ Türkisch" });
-    }
-  });
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
 
-  sock.ev.on('creds.update', saveState);
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('❌ Verbindung geschlossen. Neu verbinden:', shouldReconnect);
+            if (shouldReconnect) {
+                startBot();
+            }
+        } else if (connection === 'open') {
+            console.log('✅ Bot ist verbunden mit WhatsApp');
+        }
+    });
 
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'close') {
-      const shouldReconnect = (lastDisconnect.error = Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-      if (shouldReconnect) startBot();
-    } else if (connection === 'open') {
-      console.log("✅ Bot ist verbunden mit WhatsApp");
-    }
-  });
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const sender = msg.key.remoteJid;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+
+        console.log('📥 Nachricht erhalten:', text);
+
+        if (text.toLowerCase() === 'start') {
+            await sock.sendMessage(sender, { text: '👋 Hallo! Dein Bot ist aktiv und bereit.' });
+        }
+    });
 }
 
 startBot();
