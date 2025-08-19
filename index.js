@@ -1,7 +1,8 @@
 require('dotenv').config();
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, makeInMemoryStore } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const P = require('pino');
 const fs = require('fs');
+const tar = require('tar');
 
 // إعداد المتغيرات
 const PORT = process.env.PORT || 3000;
@@ -11,29 +12,43 @@ const CREDS_JSON = process.env.CREDS_JSON;
 const KEYS_JSON = process.env.KEYS_JSON;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// كتابة بيانات auth من base64 إلى ملفات محلية
+// مسار مجلد auth
 const authFolder = './auth_info_diginetz';
 const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
+const archivePath = './auth_info_diginetz.tar.gz';
 
-if (!fs.existsSync(authFolder)) fs.mkdirSync(authFolder);
-
-// حفظ creds.json
-if (CREDS_JSON && !fs.existsSync(credsPath)) {
-    const credsDecoded = Buffer.from(CREDS_JSON, 'base64').toString('utf-8');
-    fs.writeFileSync(credsPath, credsDecoded);
-    console.log('✅ creds.json gespeichert');
+// فك الضغط إذا كان الملف موجودًا
+async function extractAuthArchive() {
+    if (fs.existsSync(archivePath)) {
+        console.log('📦 Entpacke auth_info_diginetz.tar.gz...');
+        await tar.x({ file: archivePath });
+        console.log('✅ Entpackt!');
+    }
 }
 
-// حفظ keys.json
-if (KEYS_JSON && !fs.existsSync(keysPath)) {
-    const keysDecoded = Buffer.from(KEYS_JSON, 'base64').toString('utf-8');
-    fs.writeFileSync(keysPath, keysDecoded);
-    console.log('✅ keys.json gespeichert');
+// حفظ auth من base64 إذا لم يكن مضغوطًا
+function saveAuthFiles() {
+    if (!fs.existsSync(authFolder)) fs.mkdirSync(authFolder);
+
+    if (CREDS_JSON && !fs.existsSync(credsPath)) {
+        const credsDecoded = Buffer.from(CREDS_JSON, 'base64').toString('utf-8');
+        fs.writeFileSync(credsPath, credsDecoded);
+        console.log('✅ creds.json gespeichert');
+    }
+
+    if (KEYS_JSON && !fs.existsSync(keysPath)) {
+        const keysDecoded = Buffer.from(KEYS_JSON, 'base64').toString('utf-8');
+        fs.writeFileSync(keysPath, keysDecoded);
+        console.log('✅ keys.json gespeichert');
+    }
 }
 
-// الاتصال بـ WhatsApp
+// بدء الاتصال بـ WhatsApp
 async function startBot() {
+    await extractAuthArchive();  // فك الضغط أولاً
+    saveAuthFiles();             // أو إنشاء الملفات من base64
+
     const { state, saveCreds } = await useMultiFileAuthState(authFolder);
     const { version } = await fetchLatestBaileysVersion();
 
@@ -46,7 +61,7 @@ async function startBot() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+    sock.ev.on('connection.update', ({ connection }) => {
         if (connection === 'open') {
             console.log('✅ WhatsApp verbunden!');
         } else if (connection === 'close') {
