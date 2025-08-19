@@ -1,56 +1,48 @@
-require('dotenv').config();
-const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    DisconnectReason,
-    fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys');
-
-const { Boom } = require('@hapi/boom');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const P = require('pino');
-const fs = require('fs');
+const qrcode = require('qrcode-terminal');
 
-// إعداد المتغيرات البيئية
-const CREDS_PATH = process.env.CREDS_JSON || './creds.json';
-const KEYS_PATH = process.env.KEYS_JSON || './keys.json';
-
-// تحميل الحالة المخزنة (الاعتماد على ملفات الجلسة المشفرة)
+// Auth über Multi-File State
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_diginetz');
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info_diginetz');
 
     const sock = makeWASocket({
         logger: P({ level: 'silent' }),
+        auth: state,
         printQRInTerminal: true,
-        auth: state
+        browser: ['DigiNetz', 'WebApp', '1.0']
+    });
+
+    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+        if (qr) {
+            console.log("📷 QR-Code scannen:");
+            qrcode.generate(qr, { small: true });
+        }
+
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('🔄 Verbindung geschlossen. Neuverbinden:', shouldReconnect);
+            if (shouldReconnect) startBot();
+        }
+
+        if (connection === 'open') {
+            console.log('✅ Bot ist verbunden!');
+        }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('❌ Verbindung geschlossen. Neu verbinden:', shouldReconnect);
-            if (shouldReconnect) {
-                startBot();
-            }
-        } else if (connection === 'open') {
-            console.log('✅ Bot ist verbunden mit WhatsApp');
-        }
-    });
-
-    sock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages[0];
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
         const sender = msg.key.remoteJid;
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
-        console.log('📥 Nachricht erhalten:', text);
+        console.log(`📨 Nachricht von ${sender}: ${text}`);
 
-        if (text.toLowerCase() === 'start') {
-            await sock.sendMessage(sender, { text: '👋 Hallo! Dein Bot ist aktiv und bereit.' });
+        if (text?.toLowerCase().includes('start')) {
+            await sock.sendMessage(sender, { text: '👋 Willkommen bei DigiNetz!' });
         }
     });
 }
