@@ -1,0 +1,51 @@
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const P = require('pino');
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info_diginetz');
+
+    const sock = makeWASocket({
+        auth: state,
+        logger: P({ level: 'silent' }),
+        printQRInTerminal: true,
+        browser: ['DigiNetz', 'WebApp', '1.0']
+    });
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+            console.log("📷 Bitte QR-Code mit WhatsApp scannen:");
+            qrcode.generate(qr, { small: true });
+        }
+
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('❌ Verbindung getrennt. Erneut verbinden?', shouldReconnect);
+            if (shouldReconnect) startBot();
+        }
+
+        if (connection === 'open') {
+            console.log('✅ Bot ist erfolgreich verbunden!');
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const sender = msg.key.remoteJid;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+        console.log(`📨 Nachricht von ${sender}: ${text}`);
+
+        if (text?.toLowerCase().includes('start')) {
+            await sock.sendMessage(sender, { text: '👋 Willkommen bei DigiNetz!' });
+        }
+    });
+}
+
+startBot();
