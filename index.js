@@ -108,9 +108,28 @@ async function startBot() {
                 });
 
                 setTimeout(async () => {
-                    await sock.sendMessage(from, {
-                        text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern und leichter wiederzufinden.'
-                    });
+    // 1. أرسل النص التوضيحي
+    await sock.sendMessage(from, {
+        text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern und leichter wiederzufinden.'
+    });
+
+    // 2. أرسل بطاقة vCard لجهة الاتصال
+    await sock.sendMessage(from, {
+        contacts: {
+            displayName: "DigiNetz",
+            contacts: [
+                {
+                    vcard: `BEGIN:VCARD
+VERSION:3.0
+FN:DigiNetz
+ORG:DigiNetz;
+TEL;type=CELL;type=VOICE;waid=4915563691188:+49 155 63691188
+END:VCARD`
+                }
+            ]
+        }
+    });
+}, 7000);
 
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
