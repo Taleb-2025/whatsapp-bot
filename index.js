@@ -3,6 +3,7 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 const P = require('pino');
 const fs = require('fs');
 const tar = require('tar');
+const { generate } = require('qrcode-terminal');
 
 // إعداد المتغيرات
 const PORT = process.env.PORT || 3000;
@@ -46,8 +47,8 @@ function saveAuthFiles() {
 
 // بدء الاتصال بـ WhatsApp
 async function startBot() {
-    await extractAuthArchive();  // فك الضغط أولاً
-    saveAuthFiles();             // أو إنشاء الملفات من base64
+    await extractAuthArchive();
+    saveAuthFiles();
 
     const { state, saveCreds } = await useMultiFileAuthState(authFolder);
     const { version } = await fetchLatestBaileysVersion();
@@ -55,13 +56,17 @@ async function startBot() {
     const sock = makeWASocket({
         version,
         logger: P({ level: 'silent' }),
-        printQRInTerminal: true,
+        printQRInTerminal: false,
         auth: state,
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', ({ connection }) => {
+    sock.ev.on('connection.update', ({ connection, qr }) => {
+        if (qr) {
+            generate(qr, { small: true });
+        }
+
         if (connection === 'open') {
             console.log('✅ WhatsApp verbunden!');
         } else if (connection === 'close') {
