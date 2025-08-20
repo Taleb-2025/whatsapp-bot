@@ -11,6 +11,7 @@ const ADMIN_NUMBER = process.env.ADMIN_NUMBER;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const CREDS_JSON = process.env.CREDS_JSON;
 const KEYS_JSON = process.env.KEYS_JSON;
+const AUTH_TAR_GZ = process.env.AUTH_TAR_GZ; // ✅ مضاف
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // مسار مجلد auth
@@ -18,6 +19,15 @@ const authFolder = './auth_info_diginetz';
 const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
+
+// حفظ auth.tar.gz من base64 إن وُجد
+function saveAuthArchive() {
+    if (AUTH_TAR_GZ && !fs.existsSync(archivePath)) {
+        const buffer = Buffer.from(AUTH_TAR_GZ, 'base64');
+        fs.writeFileSync(archivePath, buffer);
+        console.log('✅ auth_info_diginetz.tar.gz gespeichert');
+    }
+}
 
 // فك الضغط إذا كان الملف موجودًا
 async function extractAuthArchive() {
@@ -47,6 +57,7 @@ function saveAuthFiles() {
 
 // بدء الاتصال بـ WhatsApp
 async function startBot() {
+    saveAuthArchive();           // ✅ تمت الإضافة
     await extractAuthArchive();
     saveAuthFiles();
 
