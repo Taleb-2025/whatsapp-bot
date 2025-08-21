@@ -92,9 +92,15 @@ async function startBot() {
 
         const text = body.trim().toLowerCase();
 
-        if (text === 'start' || text === 'Start' || text === 'jetzt starten') {
+        if (text === 'start' || text === 'jetzt starten') {
             userState[from] = 'lang';
 
+            // ✅ إرسال رابط البوت في أول رسالة
+            await sock.sendMessage(from, {
+                text: '🔗 Dies ist der offizielle DigiNetz Bot-Link:\nhttps://wa.me/4915563691188?text=Jetzt%20starten\n\nSpeichere diesen Link, um jederzeit zurückzukehren.'
+            });
+
+            // ✅ رسالة الترحيب واختيار اللغة
             await sock.sendMessage(from, {
                 text: '👋 Ich bin dein Assistant. Bitte antworte mit:\n1 = Deutsch\n2 = Arabisch\n3 = Türkisch'
             });
