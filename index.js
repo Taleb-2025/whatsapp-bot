@@ -81,8 +81,7 @@ async function startBot() {
             startBot();
         }
     });
-
-    // 🔽🔽🔽 SERVICES START 🔽🔽🔽
+// 🔽🔽🔽 SERVICES START 🔽🔽🔽
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message) return;
@@ -112,6 +111,18 @@ async function startBot() {
                     text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft. Er führt dich Schritt für Schritt durch Vorlagen (Templates), z. B. zum Erstellen einer Rechnung oder zur Ausgabenübersicht – ohne Registrierung und ohne Vorkenntnisse. Jetzt kostenlos ausprobieren!'
                 });
 
+                await sock.sendMessage(from, {
+                    contacts: {
+                        displayName: 'DigiNetz Template',
+                        contacts: [
+                            {
+                                displayName: 'DigiNetz Template',
+                                vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN:DigiNetz Template\nTEL;type=CELL;type=VOICE;waid=4915563691188:+49 155 63691188\nEND:VCARD'
+                            }
+                        ]
+                    }
+                });
+
                 setTimeout(async () => {
                     await sock.sendMessage(from, {
                         text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern und leichter wiederzufinden.'
@@ -129,6 +140,18 @@ async function startBot() {
                 userState[from] = 'ar';
                 await sock.sendMessage(from, {
                     text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة، خطوة بخطوة، من خلال قوالب جاهزة مثل إنشاء فاتورة أو متابعة مصاريفك – دون الحاجة لتسجيل دخول أو معرفة مسبقة. جرّب الخدمة الآن مجانًا!'
+                });
+
+                await sock.sendMessage(from, {
+                    contacts: {
+                        displayName: 'DigiNetz Template',
+                        contacts: [
+                            {
+                                displayName: 'DigiNetz Template',
+                                vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN:DigiNetz Template\nTEL;type=CELL;type=VOICE;waid=4915563691188:+49 155 63691188\nEND:VCARD'
+                            }
+                        ]
+                    }
                 });
 
                 setTimeout(async () => {
@@ -150,6 +173,18 @@ async function startBot() {
                     text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur. Sana hızlı ve kolay bir şekilde yardımcı olur. Seni adım adım fatura oluşturma veya gider takibi gibi şablonlarla yönlendirir – kayıt gerekmeden ve ön bilgiye ihtiyaç duymadan. Hemen ücretsiz dene!'
                 });
 
+                await sock.sendMessage(from, {
+                    contacts: {
+                        displayName: 'DigiNetz Template',
+                        contacts: [
+                            {
+                                displayName: 'DigiNetz Template',
+                                vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN:DigiNetz Template\nTEL;type=CELL;type=VOICE;waid=4915563691188:+49 155 63691188\nEND:VCARD'
+                            }
+                        ]
+                    }
+                });
+
                 setTimeout(async () => {
                     await sock.sendMessage(from, {
                         text: '💾 Botu kaydetmek için yukarıdaki "DigiNetz" adına dokun.'
@@ -164,7 +199,7 @@ async function startBot() {
             }
         }
     });
-    // 🔼🔼🔼 SERVICES END 🔼🔼🔼
+// 🔼🔼🔼 SERVICES END 🔼🔼🔼
 }
 
 startBot();
