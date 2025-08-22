@@ -81,168 +81,139 @@ async function startBot() {
             startBot();
         }
     });
-// 🔽🔽🔽 SERVICES START 🔽🔽🔽
-sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
-    if (!msg.message) return;
+// ----------------- SERVICES START -----------------
 
-    const from = msg.key.remoteJid;
-    const body = msg.message.conversation || msg.message.extendedTextMessage?.text;
-    if (!body) return;
+async function handleServices(msg, userState, userData, lang) {
+  const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+  const sender = msg.key.remoteJid;
 
-    const text = body.trim().toLowerCase();
+  const reply = async (content) => {
+    await sock.sendMessage(sender, { text: content });
+  };
 
-    if (text === 'start' || text === 'jetzt starten') {
-        userState[from] = 'lang';
+  const sendTyping = async () => {
+    await sock.sendPresenceUpdate('composing', sender);
+  };
 
-        await sock.sendMessage(from, {
-            text: '🔗 Dies ist der offizielle DigiNetz Bot-Link:\nhttps://wa.me/4915563691188?text=Jetzt%20starten\n\nSpeichere diesen Link, um jederzeit zurückzukehren.'
-        });
+  // Schritt 3 – Auswahl der Templates
+  if (userState[sender] === 'template_selection') {
+    if (text === '1') {
+      userState[sender] = 'kleingewerbe_step_1';
+      userData[sender] = { template: 'kleingewerbe' };
 
-        await sock.sendMessage(from, {
-            text: '👋 Ich bin dein Assistant. Bitte antworte mit:\n1 = Deutsch\n2 = Arabisch\n3 = Türkisch'
-        });
-        return;
+      if (lang === 'de') {
+        await reply('🧾 Schritt 1 – Wie lautet dein vollständiger Name oder Firmenname?');
+      } else if (lang === 'ar') {
+        await reply('🧾 الخطوة 1 – ما هو اسمك الكامل أو اسم شركتك؟');
+      } else if (lang === 'tr') {
+        await reply('🧾 Adım 1 – Tam adınız veya firma adınız nedir?');
+      }
+      return;
     }
 
-    // Sprachwahl
-    if (userState[from] === 'lang') {
-        if (text === '1') {
-            userState[from] = 'de';
+    // Weitere Templates hier (2, 3...)
+  }
 
-            await sock.sendMessage(from, {
-                text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft. Er führt dich Schritt für Schritt durch Vorlagen (Templates), z. B. zum Erstellen einer Rechnung oder zur Ausgabenübersicht – ohne Registrierung und ohne Vorkenntnisse. Jetzt kostenlos ausprobieren!'
-            });
+  // Schritte für Kleingewerbe Rechnung
+  const steps = {
+    kleingewerbe_step_1: {
+      next: 'kleingewerbe_step_2',
+      key: 'name',
+      msg: {
+        de: '🏠 Schritt 2 – Bitte gib deine Adresse ein (Straße, PLZ, Stadt)',
+        ar: '🏠 الخطوة 2 – الرجاء إدخال العنوان الكامل (الشارع، الرمز البريدي، المدينة)',
+        tr: '🏠 Adım 2 – Lütfen adresinizi girin (Sokak, Posta kodu, Şehir)',
+      },
+    },
+    kleingewerbe_step_2: {
+      next: 'kleingewerbe_step_3',
+      key: 'adresse',
+      msg: {
+        de: '👤 Schritt 3 – Bitte gib die Kundendaten ein (Name + Adresse)',
+        ar: '👤 الخطوة 3 – أدخل بيانات العميل (الاسم + العنوان)',
+        tr: '👤 Adım 3 – Lütfen müşteri bilgilerini girin (Ad + Adres)',
+      },
+    },
+    kleingewerbe_step_3: {
+      next: 'kleingewerbe_step_4',
+      key: 'kundendaten',
+      msg: {
+        de: `📅 Schritt 4 – Rechnungsdatum (Standard: ${new Date().toISOString().split('T')[0]}). Möchtest du ein anderes Datum? Antworte mit Datum oder "ok"`,
+        ar: `📅 الخطوة 4 – تاريخ الفاتورة (افتراضي: ${new Date().toISOString().split('T')[0]}). هل ترغب بتاريخ آخر؟ أجب بالتاريخ أو "ok"`,
+        tr: `📅 Adım 4 – Fatura tarihi (Varsayılan: ${new Date().toISOString().split('T')[0]}). Başka bir tarih istiyor musun? Tarih veya "ok" yaz`,
+      },
+    },
+    kleingewerbe_step_4: {
+      next: 'kleingewerbe_step_5',
+      key: 'datum',
+      msg: {
+        de: '🧾 Schritt 5 – Beschreibe deine Leistung (z. B. Webdesign, Beratung etc.)',
+        ar: '🧾 الخطوة 5 – صف خدمتك (مثلاً تصميم مواقع، استشارة...)',
+        tr: '🧾 Adım 5 – Hizmetinizi açıklayın (örn. web tasarım, danışmanlık)',
+      },
+    },
+    kleingewerbe_step_5: {
+      next: 'kleingewerbe_step_6',
+      key: 'leistung',
+      msg: {
+        de: '💶 Schritt 6 – Gib den Betrag ein (z. B. 100 EUR)',
+        ar: '💶 الخطوة 6 – أدخل المبلغ (مثلاً 100 EUR)',
+        tr: '💶 Adım 6 – Tutarı girin (ör. 100 EUR)',
+      },
+    },
+    kleingewerbe_step_6: {
+      next: 'kleingewerbe_step_7',
+      key: 'betrag',
+      msg: {
+        de: '💳 Schritt 7 – Zahlungsart (z. B. Überweisung, bar)',
+        ar: '💳 الخطوة 7 – طريقة الدفع (مثلاً تحويل بنكي، نقدًا)',
+        tr: '💳 Adım 7 – Ödeme yöntemi (örn. havale, nakit)',
+      },
+    },
+    kleingewerbe_step_7: {
+      next: 'kleingewerbe_step_8',
+      key: 'zahlung',
+      msg: {
+        de: '🏦 Schritt 8 – IBAN (optional, z. B. DE89...)',
+        ar: '🏦 الخطوة 8 – رقم الحساب البنكي IBAN (اختياري، مثل DE89...)',
+        tr: '🏦 Adım 8 – IBAN (isteğe bağlı, örn. DE89...)',
+      },
+    },
+    kleingewerbe_step_8: {
+      next: 'kleingewerbe_step_9',
+      key: 'iban',
+      msg: {
+        de: '📝 Schritt 9 – Zusätzliche Notizen oder "keine"',
+        ar: '📝 الخطوة 9 – ملاحظات إضافية أو اكتب "لا شيء"',
+        tr: '📝 Adım 9 – Ek notlar veya "yok"',
+      },
+    },
+    kleingewerbe_step_9: {
+      next: 'done',
+      key: 'notizen',
+      msg: {
+        de: '✅ Vielen Dank! Deine Rechnung wird vorbereitet...',
+        ar: '✅ شكراً لك! يتم الآن إعداد فاتورتك...',
+        tr: '✅ Teşekkürler! Faturanız hazırlanıyor...',
+      },
+    },
+  };
 
-            await sock.sendMessage(from, {
-                contacts: {
-                    displayName: 'DigiNetz Template',
-                    contacts: [{
-                        displayName: 'DigiNetz Template',
-                        vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN:DigiNetz Template\nTEL;type=CELL;type=VOICE;waid=4915563691188:+49 155 63691188\nEND:VCARD'
-                    }]
-                }
-            });
-
-            setTimeout(async () => {
-                await sock.sendMessage(from, {
-                    text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern und leichter wiederzufinden.'
-                });
-
-                setTimeout(async () => {
-                    await sock.sendMessage(from, {
-                        text: '🟩 Schritt 3 – Auswahl der Templates:\nBitte antworte mit einer Zahl:\n1️⃣ Kleingewerbe Rechnungen\n2️⃣ Unternehmen Rechnung (mit MwSt)\n3️⃣ Privat Ausgaben'
-                    });
-                    userState[from] = 'template';
-                }, 3000);
-            }, 7000);
-        }
+  const current = userState[sender];
+  if (steps[current]) {
+    userData[sender][steps[current].key] = text;
+    if (steps[current].next === 'done') {
+      await reply(steps[current].msg[lang]);
+      userState[sender] = null;
+      // Hier PDF-Erstellung auslösen…
+    } else {
+      userState[sender] = steps[current].next;
+      await reply(steps[current].msg[lang]);
     }
+  }
+}
 
-    // Auswahl der Vorlage
-    if (userState[from] === 'template') {
-        if (text === '1') {
-            userState[from] = 'k1';
-            userData[from] = {};
-            await sock.sendMessage(from, {
-                text: '🧾 Schritt 1 – Wie lautet dein vollständiger Name oder Firmenname?'
-            });
-            return;
-        }
-    }
-
-    // Kleingewerbe Schritte
-    if (userState[from]?.startsWith('k')) {
-        if (userState[from] === 'k1') {
-            userData[from].name = text;
-            userState[from] = 'k2';
-            await sock.sendMessage(from, {
-                text: '🏡 Schritt 2 – Bitte gib deine Adresse ein (Straße, PLZ, Stadt)'
-            });
-            return;
-        }
-
-        if (userState[from] === 'k2') {
-            userData[from].adresse = text;
-            userState[from] = 'k3';
-            await sock.sendMessage(from, {
-                text: '🧑‍🤝‍🧑 Schritt 3 – Bitte gib die Kundendaten ein (Name + Adresse)'
-            });
-            return;
-        }
-
-        if (userState[from] === 'k3') {
-            userData[from].kundendaten = text;
-            userState[from] = 'k4';
-            const today = new Date().toISOString().split('T')[0];
-            userData[from].rechnungsdatum = today;
-            await sock.sendMessage(from, {
-                text: `📅 Schritt 4 – Rechnungsdatum (Standard: ${today}).\nMöchtest du ein anderes Datum? Antworte mit Datum oder "ok"`
-            });
-            return;
-        }
-
-        if (userState[from] === 'k4') {
-            if (text !== 'ok') {
-                userData[from].rechnungsdatum = text;
-            }
-            userState[from] = 'k5';
-            await sock.sendMessage(from, {
-                text: '🧾 Schritt 5 – Beschreibe deine Leistung (z. B. Webdesign, Beratung etc.)'
-            });
-            return;
-        }
-
-        if (userState[from] === 'k5') {
-            userData[from].leistung = text;
-            userState[from] = 'k6';
-            await sock.sendMessage(from, {
-                text: '💶 Schritt 6 – Gib den Betrag ein (z. B. 100 EUR)'
-            });
-            return;
-        }
-
-        if (userState[from] === 'k6') {
-            userData[from].betrag = text;
-            userState[from] = 'k7';
-            await sock.sendMessage(from, {
-                text: '💳 Schritt 7 – Zahlungsart (z. B. Überweisung, bar)'
-            });
-            return;
-        }
-
-        if (userState[from] === 'k7') {
-            userData[from].zahlungsart = text;
-            userState[from] = 'k8';
-            await sock.sendMessage(from, {
-                text: '🏦 Schritt 8 – IBAN (optional, z. B. DE89...)'
-            });
-            return;
-        }
-
-        if (userState[from] === 'k8') {
-            userData[from].iban = text;
-            userState[from] = 'k9';
-            await sock.sendMessage(from, {
-                text: '📝 Schritt 9 – Zusätzliche Notizen oder "keine"'
-            });
-            return;
-        }
-
-        if (userState[from] === 'k9') {
-            userData[from].notizen = text;
-            userState[from] = 'fertig';
-
-            await sock.sendMessage(from, {
-                text: '✅ Vielen Dank! Deine Rechnung wird vorbereitet…'
-            });
-
-            // Optional: Hier PDF-Erstellung oder API-Aufruf einfügen
-            return;
-        }
-    }
-});
-// 🔼🔼🔼 SERVICES END 🔼🔼🔼
+// ----------------- SERVICES END -----------------
 }
 
 startBot();
