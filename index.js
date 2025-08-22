@@ -70,30 +70,37 @@ async function startBot() {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', ({ connection, qr }) => {
-        if (qr) {
-            generate(qr, { small: true });
-        }
+        if (qr) generate(qr, { small: true });
 
         if (connection === 'open') {
             console.log('✅ WhatsApp verbunden!');
         } else if (connection === 'close') {
-            console.log('❌ Verbindung geschlossen. Beende den Prozess...');
-            process.exit(1); // ⬅️ هذا هو التعديل الأساسي
+            console.log('❌ Verbindung geschlossen. Starte neu...');
+            startBot();
         }
     });
 
     // 🔽🔽🔽 SERVICES START 🔽🔽🔽
     sock.ev.on('messages.upsert', async ({ messages }) => {
+        console.log('📩 Neue Nachricht erhalten:', messages);
+
         const msg = messages[0];
-        if (!msg.message) return;
+        if (!msg.message) {
+            console.log('⚠️ Nachricht ohne Inhalt!');
+            return;
+        }
 
         const from = msg.key.remoteJid;
         const body = msg.message.conversation || msg.message.extendedTextMessage?.text;
-        if (!body) return;
+        if (!body) {
+            console.log('⚠️ Kein Text gefunden');
+            return;
+        }
 
         const text = body.trim().toLowerCase();
-        console.log('📩 Nachricht erhalten:', text);
+        console.log(`📥 Von ${from}: ${text}`);
 
+        // Schritt 1 – Start
         if (text === 'start' || text === 'jetzt starten') {
             userState[from] = 'lang';
 
@@ -106,18 +113,17 @@ async function startBot() {
             });
         }
 
+        // Schritt 2 – Sprachauswahl
         if (userState[from] === 'lang') {
             if (text === '1') {
                 userState[from] = 'de';
                 await sock.sendMessage(from, {
-                    text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft. Er führt dich Schritt für Schritt durch Vorlagen (Templates), z. B. zum Erstellen einer Rechnung oder zur Ausgabenübersicht – ohne Registrierung und ohne Vorkenntnisse. Jetzt kostenlos ausprobieren!'
+                    text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft...'
                 });
-
                 setTimeout(async () => {
                     await sock.sendMessage(from, {
-                        text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern und leichter wiederzufinden.'
+                        text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern.'
                     });
-
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
                             text: '🟩 Schritt 3 – Auswahl der Templates:\nBitte antworte mit einer Zahl:\n1️⃣ Kleingewerbe Rechnungen\n2️⃣ Unternehmen Rechnung (mit MwSt)\n3️⃣ Privat Ausgaben'
@@ -129,17 +135,15 @@ async function startBot() {
             if (text === '2') {
                 userState[from] = 'ar';
                 await sock.sendMessage(from, {
-                    text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة، خطوة بخطوة، من خلال قوالب جاهزة مثل إنشاء فاتورة أو متابعة مصاريفك – دون الحاجة لتسجيل دخول أو معرفة مسبقة. جرّب الخدمة الآن مجانًا!'
+                    text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة...'
                 });
-
                 setTimeout(async () => {
                     await sock.sendMessage(from, {
-                        text: '💾 اضغط على اسم "DigiNetz" في الأعلى لحفظ البوت والعودة إليه بسهولة.'
+                        text: '💾 اضغط على اسم "DigiNetz" في الأعلى لحفظ البوت.'
                     });
-
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
-                            text: '🟩 الخطوة 3 – اختر نوع القالب:\nيرجى الرد برقم:\n1️⃣ فاتورة مشروع صغير\n2️⃣ فاتورة شركة (مع ضريبة القيمة المضافة)\n3️⃣ المصاريف الخاصة'
+                            text: '🟩 الخطوة 3 – اختر نوع القالب:\nيرجى الرد برقم:\n1️⃣ فاتورة مشروع صغير\n2️⃣ فاتورة شركة\n3️⃣ المصاريف الخاصة'
                         });
                     }, 3000);
                 }, 7000);
@@ -148,17 +152,15 @@ async function startBot() {
             if (text === '3') {
                 userState[from] = 'tr';
                 await sock.sendMessage(from, {
-                    text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur. Sana hızlı ve kolay bir şekilde yardımcı olur. Seni adım adım fatura oluşturma veya gider takibi gibi şablonlarla yönlendirir – kayıt gerekmeden ve ön bilgiye ihtiyaç duymadan. Hemen ücretsiz dene!'
+                    text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur...'
                 });
-
                 setTimeout(async () => {
                     await sock.sendMessage(from, {
-                        text: '💾 Botu kaydetmek için yukarıdaki "DigiNetz" adına dokun.'
+                        text: '💾 Botu kaydetmek için "DigiNetz" adına dokun.'
                     });
-
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
-                            text: '🟩 Adım 3 – Şablon türünü seç:\nLütfen bir numara ile cevap ver:\n1️⃣ Küçük işletme faturası\n2️⃣ Şirket faturası (KDV dahil)\n3️⃣ Özel harcamalar.'
+                            text: '🟩 Adım 3 – Şablon türünü seç:\n1️⃣ Küçük işletme\n2️⃣ Şirket\n3️⃣ Özel harcamalar'
                         });
                     }, 3000);
                 }, 7000);
@@ -169,4 +171,4 @@ async function startBot() {
 }
 
 startBot();
-setInterval(() => {}, 1000); // verhindert das Beenden durch Railway
+setInterval(() => {}, 1000); // Railway am Leben halten
