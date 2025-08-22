@@ -82,7 +82,7 @@ async function startBot() {
         }
     });
 
-  // 🔽🔽🔽 SERVICES START 🔽🔽🔽
+// 🔽🔽🔽 SERVICES START 🔽🔽🔽
 sock.ev.on('messages.upsert', async ({ messages }) => {
   const msg = messages[0];
   if (!msg.message) return;
@@ -91,10 +91,91 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
   const body = msg.message.conversation || msg.message.extendedTextMessage?.text;
   if (!body) return;
 
-  const text = body.trim();
-  const lang = userState[from]; // Sprache (de, ar, tr)
+  const text = body.trim().toLowerCase();
 
+  if (!userState[from]) userState[from] = null;
   if (!userData[from]) userData[from] = {};
+
+  // Neustart bei "Jetzt starten"
+  if (text === 'start' || text === 'jetzt starten') {
+    userState[from] = 'lang';
+    userData[from] = {};
+
+    await sock.sendMessage(from, {
+      text: '🔗 Dies ist der offizielle DigiNetz Bot-Link:\nhttps://wa.me/4915563691188?text=Jetzt%20starten\n\nSpeichere diesen Link, um jederzeit zurückzukehren.'
+    });
+
+    await sock.sendMessage(from, {
+      text: '👋 Ich bin dein Assistant. Bitte antworte mit:\n1 = Deutsch\n2 = Arabisch\n3 = Türkisch'
+    });
+
+    return;
+  }
+
+  const lang = userState[from];
+
+  // Sprache wählen
+  if (userState[from] === 'lang') {
+    if (text === '1') {
+      userState[from] = 'de';
+      await sock.sendMessage(from, {
+        text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft. Er führt dich Schritt für Schritt durch Vorlagen (Templates), z. B. zum Erstellen einer Rechnung oder zur Ausgabenübersicht – ohne Registrierung und ohne Vorkenntnisse. Jetzt kostenlos ausprobieren!'
+      });
+
+      setTimeout(async () => {
+        await sock.sendMessage(from, {
+          text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern und leichter wiederzufinden.'
+        });
+
+        setTimeout(async () => {
+          await sock.sendMessage(from, {
+            text: '🟩 Schritt 3 – Auswahl der Templates:\nBitte antworte mit einer Zahl:\n1️⃣ Kleingewerbe Rechnungen\n2️⃣ Unternehmen Rechnung (mit MwSt)\n3️⃣ Privat Ausgaben'
+          });
+        }, 3000);
+      }, 7000);
+      return;
+    }
+
+    if (text === '2') {
+      userState[from] = 'ar';
+      await sock.sendMessage(from, {
+        text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة، خطوة بخطوة، من خلال قوالب جاهزة مثل إنشاء فاتورة أو متابعة مصاريفك – دون الحاجة لتسجيل دخول أو معرفة مسبقة. جرّب الخدمة الآن مجانًا!'
+      });
+
+      setTimeout(async () => {
+        await sock.sendMessage(from, {
+          text: '💾 اضغط على اسم "DigiNetz" في الأعلى لحفظ البوت والعودة إليه بسهولة.'
+        });
+
+        setTimeout(async () => {
+          await sock.sendMessage(from, {
+            text: '🟩 الخطوة 3 – اختر نوع القالب:\nيرجى الرد برقم:\n1️⃣ فاتورة مشروع صغير\n2️⃣ فاتورة شركة (مع ضريبة القيمة المضافة)\n3️⃣ المصاريف الخاصة'
+          });
+        }, 3000);
+      }, 7000);
+      return;
+    }
+
+    if (text === '3') {
+      userState[from] = 'tr';
+      await sock.sendMessage(from, {
+        text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur. Sana hızlı ve kolay bir şekilde yardımcı olur. Seni adım adım fatura oluşturma veya gider takibi gibi şablonlarla yönlendirir – kayıt gerekmeden ve ön bilgiye ihtiyaç duymadan. Hemen ücretsiz dene!'
+      });
+
+      setTimeout(async () => {
+        await sock.sendMessage(from, {
+          text: '💾 Botu kaydetmek için yukarıdaki "DigiNetz" adına dokun.'
+        });
+
+        setTimeout(async () => {
+          await sock.sendMessage(from, {
+            text: '🟩 Adım 3 – Şablon türünü seç:\nLütfen bir numara ile cevap ver:\n1️⃣ Küçük işletme faturası\n2️⃣ Şirket faturası (KDV dahil)\n3️⃣ Özel harcamalar.'
+          });
+        }, 3000);
+      }, 7000);
+      return;
+    }
+  }
 
   // Template-Auswahl
   if (['de', 'ar', 'tr'].includes(lang)) {
@@ -123,9 +204,9 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
   const stepData = steps[currentStep];
 
   if (stepData) {
-    if (text.trim() === '') return;
+    if (text === '') return;
 
-    userData[from][stepData.key] = text.trim();
+    userData[from][stepData.key] = text;
 
     if (stepData.next) {
       userState[from] = stepData.next;
@@ -134,7 +215,7 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
       userState[from] = null;
       await sendStep(from, lang, ...stepData.msg);
       console.log(`✅ Rechnung abgeschlossen für ${from}`, userData[from]);
-      // 👉 PDF-Erstellung hier
+      // 👉 PDF-Erstellung kann hier erfolgen
     }
   }
 
