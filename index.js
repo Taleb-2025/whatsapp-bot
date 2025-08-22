@@ -18,81 +18,17 @@ const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
 
-function saveAuthArchive() {
-    if (AUTH_TAR_GZ && !fs.existsSync(archivePath)) {
-        const buffer = Buffer.from(AUTH_TAR_GZ, 'base64');
-        fs.writeFileSync(archivePath, buffer);
-        console.log('✅ auth_info_diginetz.tar.gz gespeichert');
-    }
-}
-
-async function extractAuthArchive() {
-    if (fs.existsSync(archivePath)) {
-        console.log('📦 Entpacke auth_info_diginetz.tar.gz...');
-        await tar.x({ file: archivePath });
-        console.log('✅ Entpackt!');
-    }
-}
-
-function saveAuthFiles() {
-    if (!fs.existsSync(authFolder)) fs.mkdirSync(authFolder);
-
-    if (CREDS_JSON && !fs.existsSync(credsPath)) {
-        const credsDecoded = Buffer.from(CREDS_JSON, 'base64').toString('utf-8');
-        fs.writeFileSync(credsPath, credsDecoded);
-        console.log('✅ creds.json gespeichert');
-    }
-
-    if (KEYS_JSON && !fs.existsSync(keysPath)) {
-        const keysDecoded = Buffer.from(KEYS_JSON, 'base64').toString('utf-8');
-        fs.writeFileSync(keysPath, keysDecoded);
-        console.log('✅ keys.json gespeichert');
-    }
-}
-
 let userState = {};
+let userData = {};
 
-async function startBot() {
-    saveAuthArchive();
-    await extractAuthArchive();
-    saveAuthFiles();
-
-    const { state, saveCreds } = await useMultiFileAuthState(authFolder);
-    const { version } = await fetchLatestBaileysVersion();
-
-    const sock = makeWASocket({
-        version,
-        logger: P({ level: 'silent' }),
-        printQRInTerminal: false,
-        auth: state,
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', ({ connection, qr }) => {
-        if (qr) {
-            generate(qr, { small: true });
-        }
-
-        if (connection === 'open') {
-            console.log('✅ WhatsApp verbunden!');
-        } else if (connection === 'close') {
-            console.log('❌ Verbindung geschlossen. Starte neu...');
-            startBot();
-        }
-    });
-
-   // 🔽🔽🔽 SERVICES START 🔽🔽🔽
-async function handleServices(msg, userState, userData, lang) {
-  const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+// 🔽🔽🔽 SERVICES START 🔽🔽🔽
+async function handleServices(msg, userState, userData, lang, sock) {
+  const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
   const sender = msg.key.remoteJid;
+  if (!text || !sender) return;
 
   const reply = async (content) => {
     await sock.sendMessage(sender, { text: content });
-  };
-
-  const sendTyping = async () => {
-    await sock.sendPresenceUpdate('composing', sender);
   };
 
   // Schritt 3 – Auswahl der Templates
@@ -110,8 +46,6 @@ async function handleServices(msg, userState, userData, lang) {
       }
       return;
     }
-
-    // Hier können weitere Templates (2, 3...) ergänzt werden
   }
 
   // Schritte für Kleingewerbe Rechnung
@@ -201,15 +135,12 @@ async function handleServices(msg, userState, userData, lang) {
 
   const current = userState[sender];
   if (steps[current]) {
-    // Skip if empty message
     if (!text || text.trim() === '') return;
-
     userData[sender][steps[current].key] = text.trim();
 
     if (steps[current].next === 'done') {
       await reply(steps[current].msg[lang]);
       userState[sender] = null;
-      // Hier kannst du den PDF-Erstellungsprozess starten...
     } else {
       userState[sender] = steps[current].next;
       await reply(steps[current].msg[lang]);
@@ -217,7 +148,53 @@ async function handleServices(msg, userState, userData, lang) {
   }
 }
 // 🔼🔼🔼 SERVICES END 🔼🔼🔼
+
+
+async function startBot() {
+  saveAuthArchive();
+  await extractAuthArchive();
+  saveAuthFiles();
+
+  const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+  const { version } = await fetchLatestBaileysVersion();
+
+  const sock = makeWASocket({
+    version,
+    logger: P({ level: 'silent' }),
+    printQRInTerminal: false,
+    auth: state,
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  sock.ev.on('connection.update', ({ connection, qr }) => {
+    if (qr) generate(qr, { small: true });
+    if (connection === 'open') console.log('✅ WhatsApp verbunden!');
+    if (connection === 'close') {
+      console.log('❌ Verbindung geschlossen. Starte neu...');
+      startBot();
+    }
+  });
+
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0];
+    if (!msg.message) return;
+
+    const sender = msg.key.remoteJid;
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+    if (!text) return;
+
+    if (text.toLowerCase() === 'start' || text.toLowerCase() === 'jetzt starten') {
+      userState[sender] = 'template_selection';
+      userData[sender] = { lang: 'de' }; // Standard: Deutsch
+      await sock.sendMessage(sender, { text: 'Bitte wähle ein Template:\n1️⃣ Kleingewerbe\n2️⃣ Unternehmen\n3️⃣ Privat' });
+      return;
+    }
+
+    const lang = userData[sender]?.lang || 'de';
+    await handleServices(msg, userState, userData, lang, sock);
+  });
 }
 
 startBot();
-setInterval(() => {}, 1000); // verhindert das Beenden durch Railway
+setInterval(() => {}, 1000); // hält Railway aktiv
