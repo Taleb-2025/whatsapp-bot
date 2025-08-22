@@ -90,155 +90,156 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
     const body = msg.message.conversation || msg.message.extendedTextMessage?.text;
     if (!body) return;
 
-    const text = body.trim();
+    const text = body.trim().toLowerCase();
 
-    if (!userState[from]) userState[from] = 'lang';
-    if (!global.userData) global.userData = {};
-    if (!userData[from]) userData[from] = {};
-
-    if (text.toLowerCase() === 'start' || text.toLowerCase() === 'jetzt starten') {
+    if (text === 'start' || text === 'jetzt starten') {
         userState[from] = 'lang';
+
         await sock.sendMessage(from, {
             text: '🔗 Dies ist der offizielle DigiNetz Bot-Link:\nhttps://wa.me/4915563691188?text=Jetzt%20starten\n\nSpeichere diesen Link, um jederzeit zurückzukehren.'
         });
+
         await sock.sendMessage(from, {
             text: '👋 Ich bin dein Assistant. Bitte antworte mit:\n1 = Deutsch\n2 = Arabisch\n3 = Türkisch'
         });
         return;
     }
 
-    // Sprache wählen
+    // Sprachwahl
     if (userState[from] === 'lang') {
         if (text === '1') {
-            userState[from] = 'de_template';
+            userState[from] = 'de';
+
             await sock.sendMessage(from, {
-                text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft. Er führt dich Schritt für Schritt durch Vorlagen (Templates).'
+                text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft. Er führt dich Schritt für Schritt durch Vorlagen (Templates), z. B. zum Erstellen einer Rechnung oder zur Ausgabenübersicht – ohne Registrierung und ohne Vorkenntnisse. Jetzt kostenlos ausprobieren!'
             });
+
             await sock.sendMessage(from, {
                 contacts: {
                     displayName: 'DigiNetz Template',
-                    contacts: [
-                        {
-                            displayName: 'DigiNetz Template',
-                            vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN:DigiNetz Template\nTEL;type=CELL;type=VOICE;waid=4915563691188:+49 155 63691188\nEND:VCARD'
-                        }
-                    ]
+                    contacts: [{
+                        displayName: 'DigiNetz Template',
+                        vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN:DigiNetz Template\nTEL;type=CELL;type=VOICE;waid=4915563691188:+49 155 63691188\nEND:VCARD'
+                    }]
                 }
             });
+
             setTimeout(async () => {
                 await sock.sendMessage(from, {
-                    text: '🟩 Schritt 3 – Auswahl der Templates:\nBitte antworte mit einer Zahl:\n1️⃣ Kleingewerbe Rechnungen\n2️⃣ Unternehmen Rechnung (mit MwSt)\n3️⃣ Privat Ausgaben'
+                    text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern und leichter wiederzufinden.'
                 });
-            }, 3000);
+
+                setTimeout(async () => {
+                    await sock.sendMessage(from, {
+                        text: '🟩 Schritt 3 – Auswahl der Templates:\nBitte antworte mit einer Zahl:\n1️⃣ Kleingewerbe Rechnungen\n2️⃣ Unternehmen Rechnung (mit MwSt)\n3️⃣ Privat Ausgaben'
+                    });
+                    userState[from] = 'template';
+                }, 3000);
+            }, 7000);
         }
-        // (Arabisch و Türkisch bleiben wie gehabt)
     }
 
-    // Auswahl Kleingewerbe Rechnung
-    if (userState[from] === 'de_template' && text === '1') {
-        userState[from] = 'klein_1';
-        userData[from] = {};
-        await sock.sendMessage(from, {
-            text: '🧾 Schritt 1 – Wie lautet dein vollständiger Name oder Firmenname?'
-        });
-        return;
+    // Auswahl der Vorlage
+    if (userState[from] === 'template') {
+        if (text === '1') {
+            userState[from] = 'k1';
+            userData[from] = {};
+            await sock.sendMessage(from, {
+                text: '🧾 Schritt 1 – Wie lautet dein vollständiger Name oder Firmenname?'
+            });
+            return;
+        }
     }
 
-    // Schritt 1
-    if (userState[from] === 'klein_1') {
-        userData[from].name = text;
-        userState[from] = 'klein_2';
-        await sock.sendMessage(from, {
-            text: '🏡 Schritt 2 – Bitte gib deine Adresse ein (Straße, PLZ, Stadt)'
-        });
-        return;
-    }
+    // Kleingewerbe Schritte
+    if (userState[from]?.startsWith('k')) {
+        if (userState[from] === 'k1') {
+            userData[from].name = text;
+            userState[from] = 'k2';
+            await sock.sendMessage(from, {
+                text: '🏡 Schritt 2 – Bitte gib deine Adresse ein (Straße, PLZ, Stadt)'
+            });
+            return;
+        }
 
-    // Schritt 2
-    if (userState[from] === 'klein_2') {
-        userData[from].adresse = text;
-        userState[from] = 'klein_3';
-        await sock.sendMessage(from, {
-            text: '👤 Schritt 3 – Bitte gib die Kundendaten ein (Name + Adresse)'
-        });
-        return;
-    }
+        if (userState[from] === 'k2') {
+            userData[from].adresse = text;
+            userState[from] = 'k3';
+            await sock.sendMessage(from, {
+                text: '🧑‍🤝‍🧑 Schritt 3 – Bitte gib die Kundendaten ein (Name + Adresse)'
+            });
+            return;
+        }
 
-    // Schritt 3
-    if (userState[from] === 'klein_3') {
-        userData[from].kundendaten = text;
-        userState[from] = 'klein_4';
+        if (userState[from] === 'k3') {
+            userData[from].kundendaten = text;
+            userState[from] = 'k4';
+            const today = new Date().toISOString().split('T')[0];
+            userData[from].rechnungsdatum = today;
+            await sock.sendMessage(from, {
+                text: `📅 Schritt 4 – Rechnungsdatum (Standard: ${today}).\nMöchtest du ein anderes Datum? Antworte mit Datum oder "ok"`
+            });
+            return;
+        }
 
-        const today = new Date().toISOString().split('T')[0];
-        userData[from].defaultDatum = today;
+        if (userState[from] === 'k4') {
+            if (text !== 'ok') {
+                userData[from].rechnungsdatum = text;
+            }
+            userState[from] = 'k5';
+            await sock.sendMessage(from, {
+                text: '🧾 Schritt 5 – Beschreibe deine Leistung (z. B. Webdesign, Beratung etc.)'
+            });
+            return;
+        }
 
-        await sock.sendMessage(from, {
-            text: `📅 Schritt 4 – Rechnungsdatum (Standard: ${today}). Möchtest du ein anderes Datum? Antworte mit Datum oder "ok"`
-        });
-        return;
-    }
+        if (userState[from] === 'k5') {
+            userData[from].leistung = text;
+            userState[from] = 'k6';
+            await sock.sendMessage(from, {
+                text: '💶 Schritt 6 – Gib den Betrag ein (z. B. 100 EUR)'
+            });
+            return;
+        }
 
-    // Schritt 4
-    if (userState[from] === 'klein_4') {
-        userData[from].datum = text.toLowerCase() === 'ok' ? userData[from].defaultDatum : text;
-        userState[from] = 'klein_5';
-        await sock.sendMessage(from, {
-            text: '🧾 Schritt 5 – Beschreibe deine Leistung (z. B. Webdesign, Beratung etc.)'
-        });
-        return;
-    }
+        if (userState[from] === 'k6') {
+            userData[from].betrag = text;
+            userState[from] = 'k7';
+            await sock.sendMessage(from, {
+                text: '💳 Schritt 7 – Zahlungsart (z. B. Überweisung, bar)'
+            });
+            return;
+        }
 
-    // Schritt 5
-    if (userState[from] === 'klein_5') {
-        userData[from].leistung = text;
-        userState[from] = 'klein_6';
-        await sock.sendMessage(from, {
-            text: '💶 Schritt 6 – Gib den Betrag ein (z. B. 100 EUR)'
-        });
-        return;
-    }
+        if (userState[from] === 'k7') {
+            userData[from].zahlungsart = text;
+            userState[from] = 'k8';
+            await sock.sendMessage(from, {
+                text: '🏦 Schritt 8 – IBAN (optional, z. B. DE89...)'
+            });
+            return;
+        }
 
-    // Schritt 6
-    if (userState[from] === 'klein_6') {
-        userData[from].betrag = text;
-        userState[from] = 'klein_7';
-        await sock.sendMessage(from, {
-            text: '💳 Schritt 7 – Zahlungsart (z. B. Überweisung, bar)'
-        });
-        return;
-    }
+        if (userState[from] === 'k8') {
+            userData[from].iban = text;
+            userState[from] = 'k9';
+            await sock.sendMessage(from, {
+                text: '📝 Schritt 9 – Zusätzliche Notizen oder "keine"'
+            });
+            return;
+        }
 
-    // Schritt 7
-    if (userState[from] === 'klein_7') {
-        userData[from].zahlung = text;
-        userState[from] = 'klein_8';
-        await sock.sendMessage(from, {
-            text: '🏦 Schritt 8 – IBAN (optional, z. B. DE89...)'
-        });
-        return;
-    }
+        if (userState[from] === 'k9') {
+            userData[from].notizen = text;
+            userState[from] = 'fertig';
 
-    // Schritt 8
-    if (userState[from] === 'klein_8') {
-        userData[from].iban = text;
-        userState[from] = 'klein_9';
-        await sock.sendMessage(from, {
-            text: '📝 Schritt 9 – Zusätzliche Notizen oder "keine"'
-        });
-        return;
-    }
+            await sock.sendMessage(from, {
+                text: '✅ Vielen Dank! Deine Rechnung wird vorbereitet…'
+            });
 
-    // Schritt 9
-    if (userState[from] === 'klein_9') {
-        userData[from].notizen = text;
-        userState[from] = 'fertig';
-
-        await sock.sendMessage(from, {
-            text: '✅ Vielen Dank! Deine Rechnung wird vorbereitet...'
-        });
-
-        // Hier könnte man ein PDF generieren oder eine Bestätigung senden
-        return;
+            // Optional: Hier PDF-Erstellung oder API-Aufruf einfügen
+            return;
+        }
     }
 });
 // 🔼🔼🔼 SERVICES END 🔼🔼🔼
