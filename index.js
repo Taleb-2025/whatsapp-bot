@@ -77,8 +77,8 @@ async function startBot() {
         if (connection === 'open') {
             console.log('✅ WhatsApp verbunden!');
         } else if (connection === 'close') {
-            console.log('❌ Verbindung geschlossen. Starte neu...');
-            startBot();
+            console.log('❌ Verbindung geschlossen. Beende den Prozess...');
+            process.exit(1); // ⬅️ هذا هو التعديل الأساسي
         }
     });
 
@@ -92,6 +92,7 @@ async function startBot() {
         if (!body) return;
 
         const text = body.trim().toLowerCase();
+        console.log('📩 Nachricht erhalten:', text);
 
         if (text === 'start' || text === 'jetzt starten') {
             userState[from] = 'lang';
