@@ -82,6 +82,7 @@ async function startBot() {
         }
     });
 
+    // 🔽🔽🔽 SERVICES START 🔽🔽🔽
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message) return;
@@ -95,12 +96,10 @@ async function startBot() {
         if (text === 'start' || text === 'jetzt starten') {
             userState[from] = 'lang';
 
-            // ✅ إرسال رابط البوت في أول رسالة
             await sock.sendMessage(from, {
                 text: '🔗 Dies ist der offizielle DigiNetz Bot-Link:\nhttps://wa.me/4915563691188?text=Jetzt%20starten\n\nSpeichere diesen Link, um jederzeit zurückzukehren.'
             });
 
-            // ✅ رسالة الترحيب واختيار اللغة
             await sock.sendMessage(from, {
                 text: '👋 Ich bin dein Assistant. Bitte antworte mit:\n1 = Deutsch\n2 = Arabisch\n3 = Türkisch'
             });
@@ -165,6 +164,7 @@ async function startBot() {
             }
         }
     });
+    // 🔼🔼🔼 SERVICES END 🔼🔼🔼
 }
 
 startBot();
