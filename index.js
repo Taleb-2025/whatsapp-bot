@@ -95,6 +95,14 @@ async function handleServices(msg, userState, userData, lang) {
     await sock.sendPresenceUpdate('composing', sender);
   };
 
+  // ✅ Fallback Reset bei "Jetzt starten"
+  if (text.toLowerCase().includes('jetzt starten')) {
+    userState[sender] = 'lang_select';
+    userData[sender] = {};
+    await reply('👋 Hallo! Ich bin dein Assistant. Bitte antworte mit:\n1 = Deutsch\n2 = Arabisch\n3 = Türkisch');
+    return;
+  }
+
   // Schritt 3 – Auswahl der Templates
   if (userState[sender] === 'template_selection') {
     if (text === '1') {
