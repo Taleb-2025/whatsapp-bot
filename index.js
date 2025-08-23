@@ -5,7 +5,6 @@ const fs = require('fs');
 const tar = require('tar');
 const qrcode = require('qrcode-terminal');
 
-// ---------------- CONFIG ----------------
 const PORT = process.env.PORT || 3000;
 const ADMIN_NUMBER = process.env.ADMIN_NUMBER;
 const CREDS_JSON = process.env.CREDS_JSON;
@@ -17,12 +16,10 @@ const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
 
-let userState = {};
-let userData = {};
+let userState = {}; // حالة المستخدم
+let userData = {};  // بيانات الفاتورة
 
-// ---------------- AUTH HANDLING ----------------
-
-// حفظ auth_info_diginetz.tar.gz إذا كان موجود في ENV
+// حفظ auth_info_diginetz.tar.gz إذا كان موجودًا في ENV
 function saveAuthArchive() {
     if (AUTH_TAR_GZ && !fs.existsSync(archivePath)) {
         const buffer = Buffer.from(AUTH_TAR_GZ, 'base64');
@@ -31,7 +28,7 @@ function saveAuthArchive() {
     }
 }
 
-// فك الضغط عن بيانات الدخول
+// فك الضغط عن بيانات الدخول إذا كانت موجودة
 async function extractAuthArchive() {
     if (fs.existsSync(archivePath)) {
         console.log('📦 Entpacke auth_info_diginetz.tar.gz...');
@@ -57,8 +54,7 @@ function saveAuthFiles() {
     }
 }
 
-// ---------------- START BOT ----------------
-
+// بدء تشغيل البوت
 async function startBot() {
     try {
         saveAuthArchive();
@@ -90,9 +86,9 @@ async function startBot() {
         });
 
         // ------------------------- SERVICES START -------------------------
-        sock.ev.on('messages.upsert', async (m) => {
-            const msg = m.messages[0];
-            if (!msg.message || msg.key.fromMe) return; // تجاهل رسائل البوت نفسه
+        sock.ev.on('messages.upsert', async ({ messages }) => {
+            const msg = messages[0];
+            if (!msg.message) return;
 
             const from = msg.key.remoteJid;
             const body = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
@@ -100,7 +96,7 @@ async function startBot() {
 
             console.log(`📩 Nachricht empfangen: ${text} | Aktueller State: ${userState[from]}`);
 
-            // ---------------- START MESSAGE ----------------
+            // خطوة البداية
             if (text === 'start' || text === 'jetzt starten') {
                 userState[from] = 'lang';
 
@@ -114,7 +110,7 @@ async function startBot() {
                 return;
             }
 
-            // ---------------- LANGUAGE SELECTION ----------------
+            // خطوة اختيار اللغة
             if (userState[from] === 'lang') {
                 if (text === '1') {
                     userState[from] = 'de';
@@ -171,7 +167,7 @@ async function startBot() {
                 }
             }
 
-            // ---------------- KLEINGEWERBE RECHNUNG ----------------
+            // ---------------- Kleingewerbe Rechnung Steps ----------------
             if (userState[from] === 'de' && text === '1') {
                 userState[from] = 'kg_firma';
                 userData[from] = {};
@@ -179,51 +175,52 @@ async function startBot() {
                 return;
             }
 
-            // Schritt 1: Firmenname
-            if (userState[from] === 'kg_firma' && body) {
+            // 1. Firmenname
+            if (userState[from] === 'kg_firma') {
                 userData[from].firma = body;
                 userState[from] = 'kg_adresse';
                 await sock.sendMessage(from, { text: '📍 Bitte gib deine Firmenadresse ein:' });
                 return;
             }
 
-            // Schritt 2: Adresse
-            if (userState[from] === 'kg_adresse' && body) {
+            // 2. Adresse
+            if (userState[from] === 'kg_adresse') {
                 userData[from].adresse = body;
                 userState[from] = 'kg_kunde';
                 await sock.sendMessage(from, { text: '👤 Bitte gib den Kundennamen ein:' });
                 return;
             }
 
-            // Schritt 3: Kunde
-            if (userState[from] === 'kg_kunde' && body) {
+            // 3. Kundendaten
+            if (userState[from] === 'kg_kunde') {
                 userData[from].kunde = body;
                 userState[from] = 'kg_rechnungsnr';
                 await sock.sendMessage(from, { text: '🧾 Bitte gib die Rechnungsnummer ein:' });
                 return;
             }
 
-            // Schritt 4: Rechnungsnummer
-            if (userState[from] === 'kg_rechnungsnr' && body) {
+            // 4. Rechnungsnummer
+            if (userState[from] === 'kg_rechnungsnr') {
                 userData[from].rechnungsnr = body;
                 userState[from] = 'kg_datum';
                 await sock.sendMessage(from, { text: '📅 Bitte gib das Rechnungsdatum ein (z.B. 23.08.2025):' });
                 return;
             }
 
-            // Schritt 5: Datum
-            if (userState[from] === 'kg_datum' && body) {
+            // 5. Rechnungsdatum
+            if (userState[from] === 'kg_datum') {
                 userData[from].datum = body;
                 userState[from] = 'kg_betrag';
                 await sock.sendMessage(from, { text: '💶 Bitte gib den Gesamtbetrag ein (z.B. 299.99):' });
                 return;
             }
 
-            // Schritt 6: Betrag + Zusammenfassung
-            if (userState[from] === 'kg_betrag' && body) {
+            // 6. Betrag
+            if (userState[from] === 'kg_betrag') {
                 userData[from].betrag = body;
                 userState[from] = 'kg_bestaetigung';
 
+                // عرض ملخص الفاتورة قبل التأكيد
                 await sock.sendMessage(from, {
                     text: `📌 **Zusammenfassung deiner Rechnung:**\n\n` +
                         `🏢 Firma: ${userData[from].firma}\n` +
@@ -235,41 +232,34 @@ async function startBot() {
                         `✅ Wenn alles korrekt ist, antworte mit: *Bestätigen*\n` +
                         `❌ Zum Abbrechen: *Abbrechen*`
                 });
-                userData[from].warned = false;
                 return;
             }
 
-            // Schritt 7: Bestätigung
+            // 7. Bestätigung
             if (userState[from] === 'kg_bestaetigung') {
                 if (text === 'bestätigen' || text === 'bestaetigen') {
                     await sock.sendMessage(from, { text: '✅ Perfekt! Deine Rechnung wird jetzt erstellt...' });
+                    // TODO: ربط API DigiNetz لاحقًا لتوليد PDF
                     userState[from] = 'fertig';
-                    userData[from].warned = false;
                     return;
                 }
 
                 if (text === 'abbrechen') {
                     userState[from] = 'fertig';
-                    userData[from].warned = false;
                     await sock.sendMessage(from, { text: '🚫 Rechnungserstellung abgebrochen.' });
                     return;
                 }
 
-                if (!userData[from].warned) {
-                    userData[from].warned = true;
-                    await sock.sendMessage(from, { text: '⚠️ Bitte antworte mit *Bestätigen* oder *Abbrechen*!' });
-                }
+                await sock.sendMessage(from, { text: '⚠️ Bitte antworte mit *Bestätigen* oder *Abbrechen*!' });
                 return;
             }
         });
         // ------------------------- SERVICES END -------------------------
-
     } catch (error) {
         console.error('❌ Fehler in startBot:', error);
         setTimeout(startBot, 5000);
     }
 }
 
-// بدء التشغيل
 startBot();
-setInterval(() => {}, 1000); // لإبقاء Railway شغال
+setInterval(() => {}, 1000); // لإبقاء Railway نشطًا
