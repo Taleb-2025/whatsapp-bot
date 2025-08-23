@@ -16,10 +16,10 @@ const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
 
-let userState = {}; 
-let userData = {};  
+let userState = {}; // حالة المستخدم
+let userData = {};  // بيانات الفاتورة
 
-// حفظ auth_info_diginetz.tar.gz إذا كان موجود في ENV
+// حفظ auth_info_diginetz.tar.gz إذا كان موجودًا في ENV
 function saveAuthArchive() {
     if (AUTH_TAR_GZ && !fs.existsSync(archivePath)) {
         const buffer = Buffer.from(AUTH_TAR_GZ, 'base64');
@@ -28,7 +28,7 @@ function saveAuthArchive() {
     }
 }
 
-// فك الضغط عن بيانات الدخول
+// فك الضغط عن بيانات الدخول إذا كانت موجودة
 async function extractAuthArchive() {
     if (fs.existsSync(archivePath)) {
         console.log('📦 Entpacke auth_info_diginetz.tar.gz...');
@@ -92,12 +92,12 @@ async function startBot() {
 
             const from = msg.key.remoteJid;
             const body = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-            const text = body.trim().toLowerCase();
+            const text = body.trim().toLowerCase(); // نعمل LowerCase للتأكد من التطابق
 
             console.log(`📩 Nachricht empfangen: ${text} | Aktueller State: ${userState[from]}`);
 
-            // خطوة البداية
-            if (text === 'start' || text === 'jetzt starten') {
+            // خطوة البداية - قبول أي صيغة لكلمة Start
+            if (['start', 'jetzt starten', 'jetzt', 'los', 'go'].includes(text)) {
                 userState[from] = 'lang';
 
                 await sock.sendMessage(from, {
@@ -215,11 +215,12 @@ async function startBot() {
                 return;
             }
 
-            // 6. Betrag + عرض الملخص قبل التأكيد
+            // 6. Betrag
             if (userState[from] === 'kg_betrag') {
                 userData[from].betrag = body;
                 userState[from] = 'kg_bestaetigung';
 
+                // عرض ملخص الفاتورة قبل التأكيد
                 await sock.sendMessage(from, {
                     text: `📌 **Zusammenfassung deiner Rechnung:**\n\n` +
                         `🏢 Firma: ${userData[from].firma}\n` +
@@ -261,4 +262,4 @@ async function startBot() {
 }
 
 startBot();
-setInterval(() => {}, 1000); // لإبقاء Railway شغال
+setInterval(() => {}, 1000); // لإبقاء Railway يعمل
