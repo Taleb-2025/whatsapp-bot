@@ -5,6 +5,7 @@ const fs = require('fs');
 const tar = require('tar');
 const qrcode = require('qrcode-terminal');
 
+// ---------------- CONFIG ----------------
 const PORT = process.env.PORT || 3000;
 const ADMIN_NUMBER = process.env.ADMIN_NUMBER;
 const CREDS_JSON = process.env.CREDS_JSON;
@@ -18,6 +19,8 @@ const archivePath = './auth_info_diginetz.tar.gz';
 
 let userState = {};
 let userData = {};
+
+// ---------------- AUTH HANDLING ----------------
 
 // حفظ auth_info_diginetz.tar.gz إذا كان موجود في ENV
 function saveAuthArchive() {
@@ -54,7 +57,8 @@ function saveAuthFiles() {
     }
 }
 
-// بدء تشغيل البوت
+// ---------------- START BOT ----------------
+
 async function startBot() {
     try {
         saveAuthArchive();
@@ -86,9 +90,9 @@ async function startBot() {
         });
 
         // ------------------------- SERVICES START -------------------------
-        sock.ev.on('messages.upsert', async ({ messages }) => {
-            const msg = messages[0];
-            if (!msg.message) return;
+        sock.ev.on('messages.upsert', async (m) => {
+            const msg = m.messages[0];
+            if (!msg.message || msg.key.fromMe) return; // تجاهل رسائل البوت نفسه
 
             const from = msg.key.remoteJid;
             const body = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
@@ -96,7 +100,7 @@ async function startBot() {
 
             console.log(`📩 Nachricht empfangen: ${text} | Aktueller State: ${userState[from]}`);
 
-            // خطوة البداية
+            // ---------------- START MESSAGE ----------------
             if (text === 'start' || text === 'jetzt starten') {
                 userState[from] = 'lang';
 
@@ -110,7 +114,7 @@ async function startBot() {
                 return;
             }
 
-            // اختيار اللغة
+            // ---------------- LANGUAGE SELECTION ----------------
             if (userState[from] === 'lang') {
                 if (text === '1') {
                     userState[from] = 'de';
@@ -167,7 +171,7 @@ async function startBot() {
                 }
             }
 
-            // ---------------- Kleingewerbe Rechnung ----------------
+            // ---------------- KLEINGEWERBE RECHNUNG ----------------
             if (userState[from] === 'de' && text === '1') {
                 userState[from] = 'kg_firma';
                 userData[from] = {};
@@ -175,7 +179,7 @@ async function startBot() {
                 return;
             }
 
-            // 1. Firmenname
+            // Schritt 1: Firmenname
             if (userState[from] === 'kg_firma' && body) {
                 userData[from].firma = body;
                 userState[from] = 'kg_adresse';
@@ -183,7 +187,7 @@ async function startBot() {
                 return;
             }
 
-            // 2. Adresse
+            // Schritt 2: Adresse
             if (userState[from] === 'kg_adresse' && body) {
                 userData[from].adresse = body;
                 userState[from] = 'kg_kunde';
@@ -191,7 +195,7 @@ async function startBot() {
                 return;
             }
 
-            // 3. Kundendaten
+            // Schritt 3: Kunde
             if (userState[from] === 'kg_kunde' && body) {
                 userData[from].kunde = body;
                 userState[from] = 'kg_rechnungsnr';
@@ -199,7 +203,7 @@ async function startBot() {
                 return;
             }
 
-            // 4. Rechnungsnummer
+            // Schritt 4: Rechnungsnummer
             if (userState[from] === 'kg_rechnungsnr' && body) {
                 userData[from].rechnungsnr = body;
                 userState[from] = 'kg_datum';
@@ -207,7 +211,7 @@ async function startBot() {
                 return;
             }
 
-            // 5. Rechnungsdatum
+            // Schritt 5: Datum
             if (userState[from] === 'kg_datum' && body) {
                 userData[from].datum = body;
                 userState[from] = 'kg_betrag';
@@ -215,7 +219,7 @@ async function startBot() {
                 return;
             }
 
-            // 6. Betrag + عرض الملخص
+            // Schritt 6: Betrag + Zusammenfassung
             if (userState[from] === 'kg_betrag' && body) {
                 userData[from].betrag = body;
                 userState[from] = 'kg_bestaetigung';
@@ -231,11 +235,11 @@ async function startBot() {
                         `✅ Wenn alles korrekt ist, antworte mit: *Bestätigen*\n` +
                         `❌ Zum Abbrechen: *Abbrechen*`
                 });
-                userData[from].warned = false; // Reset التحذير
+                userData[from].warned = false;
                 return;
             }
 
-            // 7. Bestätigung (إصلاح تكرار الرسائل)
+            // Schritt 7: Bestätigung
             if (userState[from] === 'kg_bestaetigung') {
                 if (text === 'bestätigen' || text === 'bestaetigen') {
                     await sock.sendMessage(from, { text: '✅ Perfekt! Deine Rechnung wird jetzt erstellt...' });
@@ -251,7 +255,6 @@ async function startBot() {
                     return;
                 }
 
-                // التحذير لمرة واحدة فقط
                 if (!userData[from].warned) {
                     userData[from].warned = true;
                     await sock.sendMessage(from, { text: '⚠️ Bitte antworte mit *Bestätigen* oder *Abbrechen*!' });
@@ -267,5 +270,6 @@ async function startBot() {
     }
 }
 
+// بدء التشغيل
 startBot();
 setInterval(() => {}, 1000); // لإبقاء Railway شغال
