@@ -16,8 +16,8 @@ const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
 
-let userState = {}; // حالة المستخدم
-let userData = {};  // بيانات الفاتورة
+let userState = {}; 
+let userData = {};  
 
 // حفظ auth_info_diginetz.tar.gz إذا كان موجودًا في ENV
 function saveAuthArchive() {
@@ -73,7 +73,7 @@ async function startBot() {
 
         sock.ev.on('creds.update', saveCreds);
 
-        // مراقبة الاتصال وإعادة تشغيل البوت تلقائيًا عند الانقطاع
+        // مراقبة الاتصال
         sock.ev.on('connection.update', ({ connection, qr }) => {
             if (qr) qrcode.generate(qr, { small: true });
 
@@ -94,11 +94,13 @@ async function startBot() {
             const body = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
             const text = body.trim().toLowerCase();
 
-            console.log(`📩 Nachricht empfangen: ${text} | Aktueller State: ${userState[from]}`);
+            console.log(`📩 Nachricht von ${from}: ${text} | Aktueller State: ${userState[from]}`);
 
-            // خطوة البداية
+            // ---------------- Schritt 1 - Start ----------------
             if (text === 'start' || text === 'jetzt starten') {
+                console.log('🟢 [Schritt 1] Start erkannt!');
                 userState[from] = 'lang';
+                userData[from] = {};
 
                 await sock.sendMessage(from, {
                     text: '🔗 Dies ist der offizielle DigiNetz Bot-Link:\nhttps://wa.me/4915563691188?text=Jetzt%20starten\n\nSpeichere diesen Link, um jederzeit zurückzukehren.'
@@ -110,17 +112,14 @@ async function startBot() {
                 return;
             }
 
-            // خطوة اختيار اللغة
+            // ---------------- Schritt 2 - Sprache ----------------
             if (userState[from] === 'lang') {
                 if (text === '1') {
+                    console.log('🟢 Sprache: Deutsch');
                     userState[from] = 'de';
-                    await sock.sendMessage(from, {
-                        text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft...'
-                    });
+                    await sock.sendMessage(from, { text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell hilft...' });
                     setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern.'
-                        });
+                        await sock.sendMessage(from, { text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern.' });
                         setTimeout(async () => {
                             await sock.sendMessage(from, {
                                 text: '🟩 Schritt 3 – Auswahl der Templates:\nBitte antworte mit einer Zahl:\n1️⃣ Kleingewerbe Rechnungen\n2️⃣ Unternehmen Rechnung\n3️⃣ Privat Ausgaben'
@@ -131,14 +130,11 @@ async function startBot() {
                 }
 
                 if (text === '2') {
+                    console.log('🟢 Sprache: Arabisch');
                     userState[from] = 'ar';
-                    await sock.sendMessage(from, {
-                        text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة...'
-                    });
+                    await sock.sendMessage(from, { text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة...' });
                     setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '💾 اضغط على اسم "DigiNetz" في الأعلى لحفظ البوت.'
-                        });
+                        await sock.sendMessage(from, { text: '💾 اضغط على اسم "DigiNetz" في الأعلى لحفظ البوت.' });
                         setTimeout(async () => {
                             await sock.sendMessage(from, {
                                 text: '🟩 الخطوة 3 – اختر نوع القالب:\n1️⃣ فاتورة مشروع صغير\n2️⃣ فاتورة شركة\n3️⃣ المصاريف الخاصة'
@@ -149,14 +145,11 @@ async function startBot() {
                 }
 
                 if (text === '3') {
+                    console.log('🟢 Sprache: Türkisch');
                     userState[from] = 'tr';
-                    await sock.sendMessage(from, {
-                        text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur...'
-                    });
+                    await sock.sendMessage(from, { text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur...' });
                     setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '💾 Botu kaydetmek için "DigiNetz" adına dokun.'
-                        });
+                        await sock.sendMessage(from, { text: '💾 Botu kaydetmek için "DigiNetz" adına dokun.' });
                         setTimeout(async () => {
                             await sock.sendMessage(from, {
                                 text: '🟩 Adım 3 – Şablon türünü seç:\n1️⃣ Küçük işletme\n2️⃣ Şirket\n3️⃣ Özel harcamalar'
@@ -167,15 +160,16 @@ async function startBot() {
                 }
             }
 
-            // ---------------- Kleingewerbe Rechnung Steps ----------------
+            // ---------------- Kleingewerbe Rechnung ----------------
             if (userState[from] === 'de' && text === '1') {
+                console.log('🟢 Template: Kleingewerbe Rechnung');
                 userState[from] = 'kg_firma';
                 userData[from] = {};
                 await sock.sendMessage(from, { text: '🏢 Bitte gib deinen Firmennamen ein:' });
                 return;
             }
 
-            // 1. Firmenname
+            // 1. Firma
             if (userState[from] === 'kg_firma') {
                 userData[from].firma = body;
                 userState[from] = 'kg_adresse';
@@ -191,7 +185,7 @@ async function startBot() {
                 return;
             }
 
-            // 3. Kundendaten
+            // 3. Kunde
             if (userState[from] === 'kg_kunde') {
                 userData[from].kunde = body;
                 userState[from] = 'kg_rechnungsnr';
@@ -207,7 +201,7 @@ async function startBot() {
                 return;
             }
 
-            // 5. Rechnungsdatum
+            // 5. Datum
             if (userState[from] === 'kg_datum') {
                 userData[from].datum = body;
                 userState[from] = 'kg_betrag';
@@ -220,7 +214,7 @@ async function startBot() {
                 userData[from].betrag = body;
                 userState[from] = 'kg_bestaetigung';
 
-                // عرض ملخص الفاتورة قبل التأكيد
+                // عرض ملخص الفاتورة
                 await sock.sendMessage(from, {
                     text: `📌 **Zusammenfassung deiner Rechnung:**\n\n` +
                         `🏢 Firma: ${userData[from].firma}\n` +
@@ -239,7 +233,6 @@ async function startBot() {
             if (userState[from] === 'kg_bestaetigung') {
                 if (text === 'bestätigen' || text === 'bestaetigen') {
                     await sock.sendMessage(from, { text: '✅ Perfekt! Deine Rechnung wird jetzt erstellt...' });
-                    // TODO: ربط API DigiNetz لاحقًا لتوليد PDF
                     userState[from] = 'fertig';
                     return;
                 }
@@ -262,4 +255,4 @@ async function startBot() {
 }
 
 startBot();
-setInterval(() => {}, 1000); // لإبقاء Railway نشطًا
+setInterval(() => {}, 1000);
