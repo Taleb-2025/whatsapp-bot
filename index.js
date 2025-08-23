@@ -16,8 +16,8 @@ const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
 
-let userState = {}; 
-let userData = {};  
+let userState = {};
+let userData = {};
 
 // حفظ auth_info_diginetz.tar.gz إذا كان موجود في ENV
 function saveAuthArchive() {
@@ -110,7 +110,7 @@ async function startBot() {
                 return;
             }
 
-            // خطوة اختيار اللغة
+            // اختيار اللغة
             if (userState[from] === 'lang') {
                 if (text === '1') {
                     userState[from] = 'de';
@@ -167,7 +167,7 @@ async function startBot() {
                 }
             }
 
-            // ---------------- Kleingewerbe Rechnung Steps ----------------
+            // ---------------- Kleingewerbe Rechnung ----------------
             if (userState[from] === 'de' && text === '1') {
                 userState[from] = 'kg_firma';
                 userData[from] = {};
@@ -215,7 +215,7 @@ async function startBot() {
                 return;
             }
 
-            // 6. Betrag + عرض الملخص قبل التأكيد
+            // 6. Betrag + عرض الملخص
             if (userState[from] === 'kg_betrag' && body) {
                 userData[from].betrag = body;
                 userState[from] = 'kg_bestaetigung';
@@ -231,30 +231,36 @@ async function startBot() {
                         `✅ Wenn alles korrekt ist, antworte mit: *Bestätigen*\n` +
                         `❌ Zum Abbrechen: *Abbrechen*`
                 });
+                userData[from].warned = false; // Reset التحذير
                 return;
             }
 
-            // 7. Bestätigung
+            // 7. Bestätigung (إصلاح تكرار الرسائل)
             if (userState[from] === 'kg_bestaetigung') {
                 if (text === 'bestätigen' || text === 'bestaetigen') {
                     await sock.sendMessage(from, { text: '✅ Perfekt! Deine Rechnung wird jetzt erstellt...' });
                     userState[from] = 'fertig';
+                    userData[from].warned = false;
                     return;
                 }
 
                 if (text === 'abbrechen') {
                     userState[from] = 'fertig';
+                    userData[from].warned = false;
                     await sock.sendMessage(from, { text: '🚫 Rechnungserstellung abgebrochen.' });
                     return;
                 }
 
-                if (text !== 'bestätigen' && text !== 'bestaetigen' && text !== 'abbrechen') {
+                // التحذير لمرة واحدة فقط
+                if (!userData[from].warned) {
+                    userData[from].warned = true;
                     await sock.sendMessage(from, { text: '⚠️ Bitte antworte mit *Bestätigen* oder *Abbrechen*!' });
                 }
                 return;
             }
         });
         // ------------------------- SERVICES END -------------------------
+
     } catch (error) {
         console.error('❌ Fehler in startBot:', error);
         setTimeout(startBot, 5000);
