@@ -1,15 +1,12 @@
+// index.js – DigiNetz WhatsApp Bot
 require('dotenv').config();
-const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const P = require('pino');
 const fs = require('fs');
 const tar = require('tar');
 const qrcode = require('qrcode-terminal');
 
-// ==================== إعدادات المصادقة ====================
+// ==================== إعداد المتغيرات ====================
 const CREDS_JSON = process.env.CREDS_JSON;
 const KEYS_JSON = process.env.KEYS_JSON;
 const AUTH_TAR_GZ = process.env.AUTH_TAR_GZ;
@@ -19,7 +16,10 @@ const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
 
-// ==================== حفظ ملفات المصادقة ====================
+let userState = {};
+let userData = {};
+
+// ==================== تخزين بيانات الجلسة ====================
 function saveAuthArchive() {
     if (AUTH_TAR_GZ && !fs.existsSync(archivePath)) {
         const buffer = Buffer.from(AUTH_TAR_GZ, 'base64');
@@ -52,11 +52,7 @@ function saveAuthFiles() {
     }
 }
 
-// ==================== متغيرات حالة المستخدم ====================
-let userState = {};  // لتتبع المرحلة الحالية لكل مستخدم
-let userData = {};   // لتخزين بيانات كل مستخدم
-
-// ==================== بدء البوت ====================
+// ==================== تشغيل البوت ====================
 async function startBot() {
     try {
         saveAuthArchive();
@@ -87,18 +83,27 @@ async function startBot() {
             }
         });
 
-        // ==================== معالجة الرسائل ====================
+        // ==================== استقبال الرسائل ====================
         sock.ev.on('messages.upsert', async ({ messages }) => {
             const msg = messages[0];
             if (!msg.message) return;
 
             const from = msg.key.remoteJid;
-            const body = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-            const text = body.trim().toLowerCase();
 
+            // قراءة جميع أنواع النصوص (مهم جدًا لحل مشكلة الرابط)
+            const body =
+                msg.message.conversation ||
+                msg.message.extendedTextMessage?.text ||
+                msg.message.templateMessage?.hydratedTemplate?.hydratedContentText ||
+                msg.message.templateMessage?.hydratedFourRowTemplate?.content?.text ||
+                msg.message.buttonsResponseMessage?.selectedButtonId ||
+                msg.message.listResponseMessage?.singleSelectReply?.selectedRowId ||
+                '';
+
+            const text = body.trim().toLowerCase();
             console.log(`📩 Nachricht empfangen: ${text} | Aktueller State: ${userState[from]}`);
 
-            // ========== 1. البداية ==========
+            // ----------------- الخطوة 1: البداية -----------------
             if (text === 'start' || text === 'jetzt starten') {
                 userState[from] = 'lang';
 
@@ -112,15 +117,15 @@ async function startBot() {
                 return;
             }
 
-            // ========== 2. اختيار اللغة ==========
+            // ----------------- الخطوة 2: اختيار اللغة -----------------
             if (userState[from] === 'lang') {
                 if (text === '1') {
                     userState[from] = 'de';
-                    await sock.sendMessage(from, { text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft.' });
+                    await sock.sendMessage(from, {
+                        text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft...'
+                    });
                     setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern.'
-                        });
+                        await sock.sendMessage(from, { text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern.' });
                         setTimeout(async () => {
                             await sock.sendMessage(from, {
                                 text: '🟩 Schritt 3 – Auswahl der Templates:\nBitte antworte mit einer Zahl:\n1️⃣ Kleingewerbe Rechnungen\n2️⃣ Unternehmen Rechnung\n3️⃣ Privat Ausgaben'
@@ -132,11 +137,11 @@ async function startBot() {
 
                 if (text === '2') {
                     userState[from] = 'ar';
-                    await sock.sendMessage(from, { text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة خطوة بخطوة.' });
+                    await sock.sendMessage(from, {
+                        text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة...'
+                    });
                     setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '💾 اضغط على اسم "DigiNetz" في الأعلى لحفظ البوت.'
-                        });
+                        await sock.sendMessage(from, { text: '💾 اضغط على اسم "DigiNetz" في الأعلى لحفظ البوت.' });
                         setTimeout(async () => {
                             await sock.sendMessage(from, {
                                 text: '🟩 الخطوة 3 – اختر نوع القالب:\n1️⃣ فاتورة مشروع صغير\n2️⃣ فاتورة شركة\n3️⃣ المصاريف الخاصة'
@@ -148,11 +153,11 @@ async function startBot() {
 
                 if (text === '3') {
                     userState[from] = 'tr';
-                    await sock.sendMessage(from, { text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur.' });
+                    await sock.sendMessage(from, {
+                        text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur...'
+                    });
                     setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '💾 Botu kaydetmek için "DigiNetz" adına dokun.'
-                        });
+                        await sock.sendMessage(from, { text: '💾 Botu kaydetmek için "DigiNetz" adına dokun.' });
                         setTimeout(async () => {
                             await sock.sendMessage(from, {
                                 text: '🟩 Adım 3 – Şablon türünü seç:\n1️⃣ Küçük işletme\n2️⃣ Şirket\n3️⃣ Özel harcamalar'
@@ -162,14 +167,6 @@ async function startBot() {
                     return;
                 }
             }
-
-            // ========== 3. اختيار القوالب ==========
-            if (userState[from] === 'de' && text === '1') {
-                userState[from] = 'kg_firma';
-                userData[from] = {};
-                await sock.sendMessage(from, { text: '🏢 Bitte gib deinen Firmennamen ein:' });
-                return;
-            }
         });
 
     } catch (error) {
@@ -178,5 +175,6 @@ async function startBot() {
     }
 }
 
+// تشغيل البوت + إبقاء Railway نشط
 startBot();
-setInterval(() => {}, 1000); // إبقاء Railway شغال
+setInterval(() => {}, 1000);
