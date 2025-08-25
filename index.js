@@ -112,14 +112,13 @@ async function startBot() {
                 text: '👋 Ich bin dein Assistant. Bitte antworte mit:\n1 = Deutsch\n2 = Arabisch\n3 = Türkisch'
             });
         }
+
         // Schritt 2 – Sprachauswahl
         if (userState[from] === 'lang') {
             if (text === '1') {
                 userState[from] = 'de';
                 await sock.sendMessage(from, {
-                    text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft. '
-                        + 'Er führt dich Schritt für Schritt durch Vorlagen (Templates), z. B. zum Erstellen einer Rechnung oder zur Ausgabenübersicht '
-                        + '– ohne Registrierung und ohne Vorkenntnisse. Jetzt kostenlos ausprobieren!'
+                    text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft...'
                 });
                 setTimeout(async () => {
                     await sock.sendMessage(from, {
@@ -127,11 +126,7 @@ async function startBot() {
                     });
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
-                            text: '🟩 Schritt 3 – Auswahl der Templates:\n'
-                                + 'Bitte antworte mit einer Zahl:\n'
-                                + '1️⃣ Kleingewerbe Rechnungen\n'
-                                + '2️⃣ Unternehmen Rechnung (mit MwSt)\n'
-                                + '3️⃣ Privat Ausgaben'
+                            text: '🟩 Schritt 3 – Auswahl der Templates:\nBitte antworte mit einer Zahl:\n1️⃣ Kleingewerbe Rechnungen\n2️⃣ Unternehmen Rechnung (mit MwSt)\n3️⃣ Privat Ausgaben'
                         });
                     }, 3000);
                 }, 7000);
@@ -140,9 +135,7 @@ async function startBot() {
             if (text === '2') {
                 userState[from] = 'ar';
                 await sock.sendMessage(from, {
-                    text: '🇸🇦 DigiNetz Assistant هو بوت ذكي يساعدك بسرعة وسهولة، خطوة بخطوة، من خلال قوالب جاهزة '
-                        + 'مثل إنشاء فاتورة أو متابعة مصاريفك – دون الحاجة لتسجيل دخول أو معرفة مسبقة. '
-                        + 'جرّب الخدمة الآن مجانًا!'
+                    text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة...'
                 });
                 setTimeout(async () => {
                     await sock.sendMessage(from, {
@@ -150,11 +143,7 @@ async function startBot() {
                     });
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
-                            text: '🟩 الخطوة 3 – اختر نوع القالب:\n'
-                                + 'يرجى الرد برقم:\n'
-                                + '1️⃣ فاتورة مشروع صغير\n'
-                                + '2️⃣ فاتورة شركة (مع ضريبة القيمة المضافة)\n'
-                                + '3️⃣ المصاريف الخاصة'
+                            text: '🟩 الخطوة 3 – اختر نوع القالب:\nيرجى الرد برقم:\n1️⃣ فاتورة مشروع صغير\n2️⃣ فاتورة شركة\n3️⃣ المصاريف الخاصة'
                         });
                     }, 3000);
                 }, 7000);
@@ -163,9 +152,7 @@ async function startBot() {
             if (text === '3') {
                 userState[from] = 'tr';
                 await sock.sendMessage(from, {
-                    text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur. Sana hızlı ve kolay bir şekilde yardımcı olur. '
-                        + 'Seni adım adım fatura oluşturma veya gider takibi gibi şablonlarla yönlendirir '
-                        + '– kayıt gerekmeden ve ön bilgiye ihtiyaç duymadan. Hemen ücretsiz dene!'
+                    text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur...'
                 });
                 setTimeout(async () => {
                     await sock.sendMessage(from, {
@@ -173,11 +160,7 @@ async function startBot() {
                     });
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
-                            text: '🟩 Adım 3 – Şablon türünü seç:\n'
-                                + 'Lütfen bir numara ile cevap ver:\n'
-                                + '1️⃣ Küçük işletme faturası\n'
-                                + '2️⃣ Şirket faturası (KDV dahil)\n'
-                                + '3️⃣ Özel harcamalar'
+                            text: '🟩 Adım 3 – Şablon türünü seç:\n1️⃣ Küçük işletme\n2️⃣ Şirket\n3️⃣ Özel harcamalar'
                         });
                     }, 3000);
                 }, 7000);
