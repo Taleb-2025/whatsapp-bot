@@ -1,191 +1,55 @@
 require('dotenv').config();
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const P = require('pino');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
 const fs = require('fs');
-const tar = require('tar');
-const { generate } = require('qrcode-terminal');
+const path = require('path');
 
-const PORT = process.env.PORT || 3000;
-const ADMIN_NUMBER = process.env.ADMIN_NUMBER;
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const CREDS_JSON = process.env.CREDS_JSON;
-const KEYS_JSON = process.env.KEYS_JSON;
-const AUTH_TAR_GZ = process.env.AUTH_TAR_GZ;
-const NODE_ENV = process.env.NODE_ENV || 'development';
-
-const authFolder = './auth_info_diginetz';
-const credsPath = `${authFolder}/creds.json`;
-const keysPath = `${authFolder}/keys.json`;
-const archivePath = './auth_info_diginetz.tar.gz';
-
-function saveAuthArchive() {
-    if (AUTH_TAR_GZ && !fs.existsSync(archivePath)) {
-        const buffer = Buffer.from(AUTH_TAR_GZ, 'base64');
-        fs.writeFileSync(archivePath, buffer);
-        console.log('✅ auth_info_diginetz.tar.gz gespeichert');
-    }
-}
-
-async function extractAuthArchive() {
-    if (fs.existsSync(archivePath)) {
-        console.log('📦 Entpacke auth_info_diginetz.tar.gz...');
-        await tar.x({ file: archivePath });
-        console.log('✅ Entpackt!');
-    }
-}
-
-function saveAuthFiles() {
-    if (!fs.existsSync(authFolder)) fs.mkdirSync(authFolder);
-
-    if (CREDS_JSON && !fs.existsSync(credsPath)) {
-        const credsDecoded = Buffer.from(CREDS_JSON, 'base64').toString('utf-8');
-        fs.writeFileSync(credsPath, credsDecoded);
-        console.log('✅ creds.json gespeichert');
-    }
-
-    if (KEYS_JSON && !fs.existsSync(keysPath)) {
-        const keysDecoded = Buffer.from(KEYS_JSON, 'base64').toString('utf-8');
-        fs.writeFileSync(keysPath, keysDecoded);
-        console.log('✅ keys.json gespeichert');
-    }
-}
-
-let userState = {};
-
+// 🔁 Startfunktion
 async function startBot() {
-    saveAuthArchive();
-    await extractAuthArchive();
-    saveAuthFiles();
-
-    const { state, saveCreds } = await useMultiFileAuthState(authFolder);
-    const { version } = await fetchLatestBaileysVersion();
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info_diginetz');
 
     const sock = makeWASocket({
-        version,
-        logger: P({ level: 'silent' }),
-        printQRInTerminal: false,
         auth: state,
+        printQRInTerminal: true, // ⬅️ QR سيظهر في LOGS
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', ({ connection, qr }) => {
-        if (qr) generate(qr, { small: true });
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+            console.log('📸 Scan this QR Code to connect your WhatsApp:\n', qr);
+        }
+
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('❌ Verbindung geschlossen. Starte neu…');
+            if (shouldReconnect) {
+                startBot(); // 🔁 Versuche erneut zu verbinden
+            } else {
+                console.log('🚪 Bot wurde ausgeloggt. Bitte QR-Code erneut scannen.');
+            }
+        }
 
         if (connection === 'open') {
-            console.log('✅ WhatsApp verbunden!');
-        } else if (connection === 'close') {
-            console.log('❌ Verbindung geschlossen. Starte neu...');
-            startBot();
+            console.log('✅ Bot erfolgreich verbunden!');
         }
     });
-    // 🔽🔽🔽 SERVICES START 🔽🔽🔽
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        console.log('📩 Neue Nachricht erhalten:', messages);
 
-        const msg = messages[0];
-        if (!msg.message) {
-            console.log('⚠️ Nachricht ohne Inhalt!');
-            return;
-        }
+    sock.ev.on('messages.upsert', async (msg) => {
+        const message = msg.messages[0];
+        if (!message.message || message.key.fromMe) return;
 
-        const from = msg.key.remoteJid;
-        const body = msg.message.conversation || msg.message.extendedTextMessage?.text;
-        if (!body) {
-            console.log('⚠️ Kein Text gefunden');
-            return;
-        }
+        const sender = message.key.remoteJid;
+        const text = message.message.conversation || message.message.extendedTextMessage?.text || '';
 
-        const text = body.trim().toLowerCase();
-        console.log(`📥 Von ${from}: ${text}`);
+        console.log('📩 Neue Nachricht von', sender, ':', text);
 
-        // Schritt 1 – Start
-        if (text === 'start' || text === 'jetzt starten') {
-            userState[from] = 'lang';
-
-            await sock.sendMessage(from, {
-                text: '🔗 Dies ist der offizielle DigiNetz Bot-Link:\nhttps://wa.me/4915563691188?text=Jetzt%20starten\n\nSpeichere diesen Link, um jederzeit zurückzukehren.'
-            });
-
-            await sock.sendMessage(from, {
-                text: '👋 Ich bin dein Assistant. Bitte antworte mit:\n1 = Deutsch\n2 = Arabisch\n3 = Türkisch'
-            });
-        }
-
-        // Schritt 2 – Sprachauswahl
-        if (userState[from] === 'lang') {
-            if (text === '1') {
-                userState[from] = 'de';
-                await sock.sendMessage(from, {
-                    text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft. '
-                        + 'Er führt dich Schritt für Schritt durch Vorlagen (Templates), z. B. zum Erstellen einer Rechnung oder zur Ausgabenübersicht '
-                        + '– ohne Registrierung und ohne Vorkenntnisse. Jetzt kostenlos ausprobieren!'
-                });
-                setTimeout(async () => {
-                    await sock.sendMessage(from, {
-                        text: '💾 Tippe auf „DigiNetz“ oben, um den Bot zu speichern.'
-                    });
-                    setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '🟩 Schritt 3 – Auswahl der Templates:\n'
-                                + 'Bitte antworte mit einer Zahl:\n'
-                                + '1️⃣ Kleingewerbe Rechnungen\n'
-                                + '2️⃣ Unternehmen Rechnung (mit MwSt)\n'
-                                + '3️⃣ Privat Ausgaben'
-                        });
-                    }, 3000);
-                }, 7000);
-            }
-
-            if (text === '2') {
-                userState[from] = 'ar';
-                await sock.sendMessage(from, {
-                    text: '🇸🇦 DigiNetz Assistant هو بوت ذكي يساعدك بسرعة وسهولة، خطوة بخطوة، من خلال قوالب جاهزة '
-                        + 'مثل إنشاء فاتورة أو متابعة مصاريفك – دون الحاجة لتسجيل دخول أو معرفة مسبقة. '
-                        + 'جرّب الخدمة الآن مجانًا!'
-                });
-                setTimeout(async () => {
-                    await sock.sendMessage(from, {
-                        text: '💾 اضغط على اسم "DigiNetz" في الأعلى لحفظ البوت.'
-                    });
-                    setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '🟩 الخطوة 3 – اختر نوع القالب:\n'
-                                + 'يرجى الرد برقم:\n'
-                                + '1️⃣ فاتورة مشروع صغير\n'
-                                + '2️⃣ فاتورة شركة (مع ضريبة القيمة المضافة)\n'
-                                + '3️⃣ المصاريف الخاصة'
-                        });
-                    }, 3000);
-                }, 7000);
-            }
-
-            if (text === '3') {
-                userState[from] = 'tr';
-                await sock.sendMessage(from, {
-                    text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur. Sana hızlı ve kolay bir şekilde yardımcı olur. '
-                        + 'Seni adım adım fatura oluşturma veya gider takibi gibi şablonlarla yönlendirir '
-                        + '– kayıt gerekmeden ve ön bilgiye ihtiyaç duymadan. Hemen ücretsiz dene!'
-                });
-                setTimeout(async () => {
-                    await sock.sendMessage(from, {
-                        text: '💾 Botu kaydetmek için "DigiNetz" adına dokun.'
-                    });
-                    setTimeout(async () => {
-                        await sock.sendMessage(from, {
-                            text: '🟩 Adım 3 – Şablon türünü seç:\n'
-                                + 'Lütfen bir numara ile cevap ver:\n'
-                                + '1️⃣ Küçük işletme faturası\n'
-                                + '2️⃣ Şirket faturası (KDV dahil)\n'
-                                + '3️⃣ Özel harcamalar'
-                        });
-                    }, 3000);
-                }, 7000);
-            }
+        if (text.toLowerCase().includes('start')) {
+            await sock.sendMessage(sender, { text: '👋 Hallo! Dein WhatsApp-Bot ist aktiv.' });
         }
     });
-    // 🔼🔼🔼 SERVICES END 🔼🔼🔼
 }
 
 startBot();
-setInterval(() => {}, 1000); // Railway am Leben halten
