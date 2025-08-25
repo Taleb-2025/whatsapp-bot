@@ -11,6 +11,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const CREDS_JSON = process.env.CREDS_JSON;
 const KEYS_JSON = process.env.KEYS_JSON;
 const AUTH_TAR_GZ = process.env.AUTH_TAR_GZ;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
 const authFolder = './auth_info_diginetz';
 const credsPath = `${authFolder}/creds.json`;
