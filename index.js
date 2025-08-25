@@ -8,10 +8,14 @@ const { generate } = require('qrcode-terminal');
 const PORT = process.env.PORT || 3000;
 const ADMIN_NUMBER = process.env.ADMIN_NUMBER;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const CREDS_JSON = process.env.CREDS_JSON;
+const KEYS_JSON = process.env.KEYS_JSON;
 const AUTH_TAR_GZ = process.env.AUTH_TAR_GZ;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 const authFolder = './auth_info_diginetz';
+const credsPath = `${authFolder}/creds.json`;
+const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
 
 function saveAuthArchive() {
@@ -30,11 +34,28 @@ async function extractAuthArchive() {
     }
 }
 
+function saveAuthFiles() {
+    if (!fs.existsSync(authFolder)) fs.mkdirSync(authFolder);
+
+    if (CREDS_JSON && !fs.existsSync(credsPath)) {
+        const credsDecoded = Buffer.from(CREDS_JSON, 'base64').toString('utf-8');
+        fs.writeFileSync(credsPath, credsDecoded);
+        console.log('✅ creds.json gespeichert');
+    }
+
+    if (KEYS_JSON && !fs.existsSync(keysPath)) {
+        const keysDecoded = Buffer.from(KEYS_JSON, 'base64').toString('utf-8');
+        fs.writeFileSync(keysPath, keysDecoded);
+        console.log('✅ keys.json gespeichert');
+    }
+}
+
 let userState = {};
 
 async function startBot() {
     saveAuthArchive();
     await extractAuthArchive();
+    saveAuthFiles();
 
     const { state, saveCreds } = await useMultiFileAuthState(authFolder);
     const { version } = await fetchLatestBaileysVersion();
@@ -161,26 +182,6 @@ async function startBot() {
                     }, 3000);
                 }, 7000);
             }
-        }
-
-        // Schritt 3 – Kleingewerbe Rechnung (Nur Rechnungsnummer)
-        if (text === '1' && (userState[from] === 'de' || userState[from] === 'ar' || userState[from] === 'tr')) {
-            userState[from] = 'kleine_rechnung_nummer';
-
-            let msgText = '';
-            if (userState[from] === 'de') msgText = 'Bitte gib die Rechnungsnummer ein:';
-            if (userState[from] === 'ar') msgText = 'الرجاء إدخال رقم الفاتورة:';
-            if (userState[from] === 'tr') msgText = 'Lütfen fatura numarasını girin:';
-
-            await sock.sendMessage(from, { text: msgText });
-        }
-
-        if (userState[from] === 'kleine_rechnung_nummer') {
-            const rechnungsNummer = text;
-            await sock.sendMessage(from, {
-                text: `✅ Deine Rechnungsnummer wurde gespeichert: ${rechnungsNummer}`
-            });
-            userState[from] = null; // reset after saving number
         }
     });
     // 🔼🔼🔼 SERVICES END 🔼🔼🔼
