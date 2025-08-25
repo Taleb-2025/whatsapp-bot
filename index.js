@@ -16,8 +16,8 @@ const credsPath = `${authFolder}/creds.json`;
 const keysPath = `${authFolder}/keys.json`;
 const archivePath = './auth_info_diginetz.tar.gz';
 
-let userState = {}; // حالة المستخدم
-let userData = {};  // بيانات الفاتورة
+let userState = {};
+let userData = {};
 
 // حفظ auth_info_diginetz.tar.gz إذا كان موجودًا في ENV
 function saveAuthArchive() {
@@ -96,7 +96,7 @@ async function startBot() {
 
             console.log(`📩 Nachricht empfangen: ${text} | Aktueller State: ${userState[from]}`);
 
-            // خطوة البداية
+            // Schritt 1 - Start
             if (text === 'start' || text === 'jetzt starten') {
                 userState[from] = 'lang';
 
@@ -110,12 +110,13 @@ async function startBot() {
                 return;
             }
 
-            // خطوة اختيار اللغة
+            // Schritt 2 - Sprachauswahl
             if (userState[from] === 'lang') {
                 if (text === '1') {
                     userState[from] = 'de';
+                    userState[from + "_lang"] = 'de';
                     await sock.sendMessage(from, {
-                        text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell und einfach hilft...'
+                        text: '🇩🇪 DigiNetz Assistant ist ein intelligenter Bot, der dir blitzschnell hilft.\nEr führt dich Schritt für Schritt durch Vorlagen, z.B. Rechnungen erstellen oder Ausgaben verwalten – ohne Registrierung und ohne Vorkenntnisse.\nJetzt kostenlos ausprobieren!'
                     });
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
@@ -132,8 +133,9 @@ async function startBot() {
 
                 if (text === '2') {
                     userState[from] = 'ar';
+                    userState[from + "_lang"] = 'ar';
                     await sock.sendMessage(from, {
-                        text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة...'
+                        text: '🇸🇦 هو بوت ذكي يساعدك بسرعة وسهولة خطوة بخطوة من خلال قوالب جاهزة مثل إنشاء فاتورة أو متابعة مصاريفك – دون الحاجة لتسجيل دخول أو معرفة مسبقة. جرّب الخدمة الآن مجانًا!'
                     });
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
@@ -150,8 +152,9 @@ async function startBot() {
 
                 if (text === '3') {
                     userState[from] = 'tr';
+                    userState[from + "_lang"] = 'tr';
                     await sock.sendMessage(from, {
-                        text: '🇹🇷 DigiNetz Assistant, akıllı bir bottur...'
+                        text: '🇹🇷 DigiNetz Assistant akıllı bir bottur. Sana hızlı ve kolay bir şekilde yardımcı olur. Fatura oluşturma veya gider takibi gibi şablonlarla seni adım adım yönlendirir – kayıt gerekmeden ve ön bilgiye ihtiyaç duymadan. Hemen ücretsiz dene!'
                     });
                     setTimeout(async () => {
                         await sock.sendMessage(from, {
@@ -167,86 +170,46 @@ async function startBot() {
                 }
             }
 
-            // ---------------- Kleingewerbe Rechnung Steps ----------------
-            if (userState[from] === 'de' && text === '1') {
-                userState[from] = 'kg_firma';
-                userData[from] = {};
-                await sock.sendMessage(from, { text: '🏢 Bitte gib deinen Firmennamen ein:' });
-                return;
-            }
-
-            // 1. Firmenname
-            if (userState[from] === 'kg_firma') {
-                userData[from].firma = body;
-                userState[from] = 'kg_adresse';
-                await sock.sendMessage(from, { text: '📍 Bitte gib deine Firmenadresse ein:' });
-                return;
-            }
-
-            // 2. Adresse
-            if (userState[from] === 'kg_adresse') {
-                userData[from].adresse = body;
-                userState[from] = 'kg_kunde';
-                await sock.sendMessage(from, { text: '👤 Bitte gib den Kundennamen ein:' });
-                return;
-            }
-
-            // 3. Kundendaten
-            if (userState[from] === 'kg_kunde') {
-                userData[from].kunde = body;
+            // === Schritt 3: Kleingewerbe Rechnung – Erste Abfrage ===
+            if ((userState[from] === 'de' || userState[from] === 'ar' || userState[from] === 'tr') && text === '1') {
                 userState[from] = 'kg_rechnungsnr';
-                await sock.sendMessage(from, { text: '🧾 Bitte gib die Rechnungsnummer ein:' });
+
+                const lang = userState[from + "_lang"];
+                if (lang === 'de') {
+                    await sock.sendMessage(from, { text: '🧾 Bitte gib die *Rechnungsnummer* ein:\n(z.B. RE-2025-001)' });
+                } else if (lang === 'ar') {
+                    await sock.sendMessage(from, { text: '🧾 من فضلك أدخل *رقم الفاتورة*:\n(مثال: RE-2025-001)' });
+                } else {
+                    await sock.sendMessage(from, { text: '🧾 Lütfen *fatura numarasını* girin:\n(Örn: RE-2025-001)' });
+                }
                 return;
             }
 
-            // 4. Rechnungsnummer
+            // 4. Rechnungsnummer speichern
             if (userState[from] === 'kg_rechnungsnr') {
+                userData[from] = {};
                 userData[from].rechnungsnr = body;
-                userState[from] = 'kg_datum';
-                await sock.sendMessage(from, { text: '📅 Bitte gib das Rechnungsdatum ein (z.B. 23.08.2025):' });
-                return;
-            }
 
-            // 5. Rechnungsdatum
-            if (userState[from] === 'kg_datum') {
-                userData[from].datum = body;
-                userState[from] = 'kg_betrag';
-                await sock.sendMessage(from, { text: '💶 Bitte gib den Gesamtbetrag ein (z.B. 299.99):' });
-                return;
-            }
-
-            // 6. Betrag
-            if (userState[from] === 'kg_betrag') {
-                userData[from].betrag = body;
                 userState[from] = 'kg_bestaetigung';
-
-                // عرض ملخص الفاتورة قبل التأكيد
                 await sock.sendMessage(from, {
-                    text: `📌 **Zusammenfassung deiner Rechnung:**\n\n` +
-                        `🏢 Firma: ${userData[from].firma}\n` +
-                        `📍 Adresse: ${userData[from].adresse}\n` +
-                        `👤 Kunde: ${userData[from].kunde}\n` +
-                        `🧾 Rechnungsnummer: ${userData[from].rechnungsnr}\n` +
-                        `📅 Datum: ${userData[from].datum}\n` +
-                        `💶 Betrag: ${userData[from].betrag}\n\n` +
-                        `✅ Wenn alles korrekt ist, antworte mit: *Bestätigen*\n` +
-                        `❌ Zum Abbrechen: *Abbrechen*`
+                    text: `✅ Deine Rechnungsnummer ist: *${body}*\n\nAntworte mit *Bestätigen* oder *Abbrechen*.`
                 });
                 return;
             }
 
-            // 7. Bestätigung
+            // 5. Bestätigung
             if (userState[from] === 'kg_bestaetigung') {
                 if (text === 'bestätigen' || text === 'bestaetigen') {
                     await sock.sendMessage(from, { text: '✅ Perfekt! Deine Rechnung wird jetzt erstellt...' });
-                    // TODO: ربط API DigiNetz لاحقًا لتوليد PDF
-                    userState[from] = 'fertig';
+                    delete userState[from];
+                    delete userData[from];
                     return;
                 }
 
                 if (text === 'abbrechen') {
-                    userState[from] = 'fertig';
                     await sock.sendMessage(from, { text: '🚫 Rechnungserstellung abgebrochen.' });
+                    delete userState[from];
+                    delete userData[from];
                     return;
                 }
 
