@@ -1,54 +1,43 @@
 require('dotenv').config();
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
 
-// تشغيل البوت
 async function startBot() {
-    // مسار حفظ الجلسة الجديدة
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info_diginetz');
 
-    // إنشاء اتصال
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true, // ✅ QR سيظهر في LOGS مباشرة
+        printQRInTerminal: false // ❌ نوقف النظام القديم لأنه لم يعد مدعوم
     });
 
-    // حفظ بيانات الجلسة الجديدة
-    sock.ev.on('creds.update', saveCreds);
-
-    // التحقق من حالة الاتصال
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+    // ✅ عندما يولد Baileys QR جديد
+    sock.ev.on('connection.update', (update) => {
+        const { connection, qr } = update;
 
         if (qr) {
-            console.log('📌 Scan diesen QR Code mit WhatsApp:');
-            console.log(qr);
-        }
-
-        if (connection === 'close') {
-            const shouldReconnect = new Boom(lastDisconnect?.error).output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('❌ Verbindung verloren. Starte neu…');
-            if (shouldReconnect) {
-                startBot();
-            } else {
-                console.log('🚪 Bot wurde ausgeloggt. Bitte QR-Code erneut scannen.');
-            }
+            console.clear();
+            console.log('🔗 رابط رسمي لمسح QR عبر المتصفح:\n');
+            console.log(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
+            console.log('\nأو امسح QR مباشرة من الرابط أعلاه ✅');
         }
 
         if (connection === 'open') {
-            console.log('✅ Erfolgreich verbunden!');
+            console.log('✅ تم الربط بنجاح مع واتساب');
+        } else if (connection === 'close') {
+            console.log('❌ تم قطع الاتصال.. إعادة المحاولة');
+            startBot();
         }
     });
 
-    // استقبال الرسائل
+    sock.ev.on('creds.update', saveCreds);
+
+    // الرد على رسالة "start"
     sock.ev.on('messages.upsert', async (msg) => {
         const message = msg.messages[0];
         if (!message.message || message.key.fromMe) return;
 
         const sender = message.key.remoteJid;
-        const text = message.message.conversation || message.message.extendedTextMessage?.text || '';
-
-        console.log(`📩 Neue Nachricht von ${sender}: ${text}`);
+        const text = message.message.conversation || '';
 
         if (text.toLowerCase() === 'start') {
             await sock.sendMessage(sender, { text: '👋 Hallo! Dein WhatsApp-Bot ist jetzt aktiv ✅' });
