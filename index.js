@@ -1,60 +1,46 @@
-// index.js – DigiNetz WhatsApp Bot
 require('dotenv').config();
-const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    DisconnectReason
-} = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
-const qrcode = require('qrcode');
-const fs = require('fs');
-const path = require('path');
 
-// ==== بدء البوت ====
+// تشغيل البوت
 async function startBot() {
-    // تخزين بيانات الاتصال
+    // مسار حفظ الجلسة الجديدة
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info_diginetz');
 
     // إنشاء اتصال
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true, // QR سيظهر في اللوج مباشرة
+        printQRInTerminal: true, // ✅ QR سيظهر في LOGS مباشرة
     });
 
-    // حفظ التوكنات تلقائياً
+    // حفظ بيانات الجلسة الجديدة
     sock.ev.on('creds.update', saveCreds);
 
-    // === متابعة حالة الاتصال ===
+    // التحقق من حالة الاتصال
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log("📸 مسح هذا QR لربط واتساب...");
-
-            // إنشاء رابط مباشر لفتح QR في المتصفح
-            const qrLink = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
-            console.log(`🌍 افتح هذا الرابط لمسح الكود مباشرة:\n${qrLink}`);
+            console.log('📌 Scan diesen QR Code mit WhatsApp:');
+            console.log(qr);
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error instanceof Boom)
-                ? lastDisconnect.error.output?.statusCode !== DisconnectReason.loggedOut
-                : true;
-
-            console.log('❌ تم قطع الاتصال. إعادة المحاولة...');
+            const shouldReconnect = new Boom(lastDisconnect?.error).output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('❌ Verbindung verloren. Starte neu…');
             if (shouldReconnect) {
                 startBot();
             } else {
-                console.log('🚪 تم تسجيل الخروج. امسح QR جديد للمتابعة.');
+                console.log('🚪 Bot wurde ausgeloggt. Bitte QR-Code erneut scannen.');
             }
         }
 
         if (connection === 'open') {
-            console.log('✅ تم ربط البوت بنجاح!');
+            console.log('✅ Erfolgreich verbunden!');
         }
     });
 
-    // === استقبال الرسائل ===
+    // استقبال الرسائل
     sock.ev.on('messages.upsert', async (msg) => {
         const message = msg.messages[0];
         if (!message.message || message.key.fromMe) return;
@@ -62,11 +48,10 @@ async function startBot() {
         const sender = message.key.remoteJid;
         const text = message.message.conversation || message.message.extendedTextMessage?.text || '';
 
-        console.log('📩 رسالة جديدة من', sender, ':', text);
+        console.log(`📩 Neue Nachricht von ${sender}: ${text}`);
 
-        // مثال: تفعيل البوت بكلمة Start
-        if (text.toLowerCase().includes('start')) {
-            await sock.sendMessage(sender, { text: '👋 Hallo! Dein DigiNetz-Bot ist jetzt aktiv ✅' });
+        if (text.toLowerCase() === 'start') {
+            await sock.sendMessage(sender, { text: '👋 Hallo! Dein WhatsApp-Bot ist jetzt aktiv ✅' });
         }
     });
 }
