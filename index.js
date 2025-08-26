@@ -1,46 +1,56 @@
-require('dotenv').config();
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
+require("dotenv").config();
+const { default: makeWASocket, useMultiFileAuthState, Browsers, DisconnectReason } = require("@whiskeysockets/baileys");
+const fs = require("fs");
+const path = require("path");
+const qrcode = require("qrcode-terminal");
 
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('./auth_info_diginetz');
+    const authPath = path.join(__dirname, "auth_info_diginetz");
+    const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false // ❌ نوقف النظام القديم لأنه لم يعد مدعوم
+        printQRInTerminal: true,
+        browser: Browsers.macOS("Desktop"),
     });
 
-    // ✅ عندما يولد Baileys QR جديد
-    sock.ev.on('connection.update', (update) => {
-        const { connection, qr } = update;
+    sock.ev.on("connection.update", (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.clear();
-            console.log('🔗 رابط رسمي لمسح QR عبر المتصفح:\n');
+            console.log("🔗 رابط QR جاهز:");
             console.log(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
-            console.log('\nأو امسح QR مباشرة من الرابط أعلاه ✅');
+            qrcode.generate(qr, { small: true });
         }
 
-        if (connection === 'open') {
-            console.log('✅ تم الربط بنجاح مع واتساب');
-        } else if (connection === 'close') {
-            console.log('❌ تم قطع الاتصال.. إعادة المحاولة');
-            startBot();
+        if (connection === "close") {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason === DisconnectReason.loggedOut) {
+                console.log("❌ تم تسجيل الخروج. حذف ملفات المصادقة وإعادة الاتصال...");
+                fs.rmSync(authPath, { recursive: true, force: true });
+                startBot();
+            } else {
+                console.log("⚠️ انقطع الاتصال. إعادة المحاولة...");
+                startBot();
+            }
+        } else if (connection === "open") {
+            console.log("✅ تم الاتصال بنجاح! البوت جاهز الآن 🚀");
         }
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on("creds.update", saveCreds);
 
-    // الرد على رسالة "start"
-    sock.ev.on('messages.upsert', async (msg) => {
-        const message = msg.messages[0];
-        if (!message.message || message.key.fromMe) return;
+    sock.ev.on("messages.upsert", async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-        const sender = message.key.remoteJid;
-        const text = message.message.conversation || '';
+        const from = msg.key.remoteJid;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
-        if (text.toLowerCase() === 'start') {
-            await sock.sendMessage(sender, { text: '👋 Hallo! Dein WhatsApp-Bot ist jetzt aktiv ✅' });
+        if (!text) return;
+
+        if (text.toLowerCase() === "start") {
+            await sock.sendMessage(from, { text: "👋 Hallo, dein DigiNetz Bot ist aktiv und bereit!" });
         }
     });
 }
