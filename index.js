@@ -1,73 +1,72 @@
-require("dotenv").config();
-const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    DisconnectReason,
-} = require("@whiskeysockets/baileys");
-const fs = require("fs");
-const P = require("pino");
+require('dotenv').config();
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const P = require('pino');
+const fs = require('fs');
 
+// إعداد المجلد لحفظ بيانات الاتصال
+const authFolder = './auth_info_diginetz';
+
+// بدء تشغيل البوت
 async function startBot() {
-    const authDir = "./auth_info_diginetz";
+    // تحميل حالة الاتصال
+    const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+    const { version } = await fetchLatestBaileysVersion();
 
-    // إنشاء المجلد إذا لم يكن موجودًا
-    if (!fs.existsSync(authDir)) {
-        fs.mkdirSync(authDir, { recursive: true });
-    }
-
-    // تحميل حالة المصادقة
-    const { state, saveCreds } = await useMultiFileAuthState(authDir);
-
-    // إنشاء الاتصال مع واتساب
+    // إنشاء اتصال مع WhatsApp
     const sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: true, // لعرض QR في Railway Logs
-        logger: P({ level: "silent" }),
+        version,
+        logger: P({ level: 'silent' }),
+        printQRInTerminal: true,
+        auth: state
     });
 
-    // حفظ بيانات الجلسة (creds و keys) بعد أي تحديث
-    sock.ev.on("creds.update", saveCreds);
+    // حفظ التحديثات في حالة الاتصال
+    sock.ev.on('creds.update', saveCreds);
 
-    // عند استقبال رسالة جديدة
-    sock.ev.on("messages.upsert", async ({ messages, type }) => {
-        if (type !== "notify") return;
-        const msg = messages[0];
-        if (!msg.message) return;
+    // مراقبة الاتصال وإعادة التشغيل تلقائيًا عند انقطاعه
+    sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+        if (qr) {
+            console.log('📸 Scan den QR Code:\n', qr);
+        }
 
-        const from = msg.key.remoteJid;
-        const body =
-            msg.message.conversation ||
-            msg.message.extendedTextMessage?.text ||
-            "";
+        if (connection === 'open') {
+            console.log('✅ WhatsApp erfolgreich verbunden!');
+        }
 
-        // الرد على "Jetzt starten"
-        if (body.toLowerCase().includes("jetzt starten")) {
-            await sock.sendMessage(from, {
-                text: "👋 Hallo! Dein DigiNetz Bot ist jetzt aktiv ✅",
-            });
+        if (connection === 'close') {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            console.log('❌ Verbindung geschlossen:', reason);
+
+            if (reason !== DisconnectReason.loggedOut) {
+                console.log('🔄 Versuche erneut zu verbinden...');
+                startBot();
+            } else {
+                console.log('🚪 Bot wurde ausgeloggt. Bitte QR-Code erneut scannen.');
+            }
         }
     });
 
-    // عند حدوث انقطاع في الاتصال
-    sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect } = update;
+    // استقبال الرسائل الواردة
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-        if (connection === "close") {
-            const reason =
-                lastDisconnect?.error?.output?.statusCode || "Unknown";
-            console.log("Verbindung geschlossen:", reason);
+        const from = msg.key.remoteJid;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
 
-            // إعادة الاتصال تلقائيًا إذا تم تسجيل الخروج
-            if (reason !== DisconnectReason.loggedOut) {
-                console.log("🔄 Verbinde erneut...");
-                startBot();
-            } else {
-                console.log("❌ Sitzung abgelaufen. Bitte QR erneut scannen.");
-            }
-        } else if (connection === "open") {
-            console.log("✅ Erfolgreich verbunden!");
+        console.log(`📩 Nachricht von ${from}: ${text}`);
+
+        // الرد عند استقبال كلمة Start
+        if (text.trim().toLowerCase() === 'start' || text.trim().toLowerCase() === 'jetzt starten') {
+            await sock.sendMessage(from, {
+                text: '👋 Hallo! Dein DigiNetz WhatsApp-Bot ist jetzt aktiv ✅'
+            });
         }
     });
 }
 
+// تشغيل البوت
 startBot();
+
+// منع Railway من إيقاف العملية
+setInterval(() => {}, 1000);
