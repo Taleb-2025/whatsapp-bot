@@ -1,74 +1,79 @@
-// index.js - DigiNetz WhatsApp Bot on Railway
-
-require("dotenv").config();
+// index.js – DigiNetz WhatsApp Bot (QR عبر المتصفح)
+require('dotenv').config();
 const express = require("express");
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode");
-const fs = require("fs");
+const P = require("pino");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ---------------------------
+// 1. صفحة رئيسية للـ QR
+// ---------------------------
 let qrCodeData = "";
-let sock;
-
-// === إنشاء سيرفر Express لعرض QR Code كرابط ===
 app.get("/", (req, res) => {
-    if (!qrCodeData) {
-        return res.send("<h2>⏳ انتظر قليلاً... يتم توليد QR Code الآن</h2>");
+    if (qrCodeData) {
+        res.send(`<h2>Scan den QR Code</h2><img src="${qrCodeData}" />`);
+    } else {
+        res.send("<h3>QR Code wird generiert... Aktualisiere die Seite gleich!</h3>");
     }
-    res.send(`
-        <h1>امسح QR Code لتفعيل البوت</h1>
-        <img src="${qrCodeData}" width="300" height="300" />
-    `);
 });
 
-// === تشغيل السيرفر على Railway ===
-app.listen(PORT, () => {
-    console.log(`🌐 Server läuft auf: http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`🌍 Server läuft: https://diginetz-bot.up.railway.app`));
 
-// === بدء الاتصال مع WhatsApp ===
-async function startSock() {
-    const { state, saveCreds } = await useMultiFileAuthState("auth_info_diginetz");
+// ---------------------------
+// 2. تشغيل بوت DigiNetz
+// ---------------------------
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState("./auth_info_diginetz");
 
-    sock = makeWASocket({
+    const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false // لن نعرض QR هنا بل على الرابط
+        printQRInTerminal: false,
+        logger: P({ level: "silent" })
     });
 
-    // عند ظهور QR جديد → نحوله إلى صورة Base64 ونحفظه للعرض في الرابط
+    // ---------------------------
+    // 3. توليد QR Code تلقائيًا
+    // ---------------------------
     sock.ev.on("connection.update", async (update) => {
-        const { connection, qr } = update;
+        const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
             qrCodeData = await qrcode.toDataURL(qr);
-            console.log("✅ QR Code جاهز → افتحه عبر الرابط في Railway Logs");
+            console.log(`📌 Öffne diesen Link und scanne den QR: https://diginetz-bot.up.railway.app`);
+        }
+
+        if (connection === "close") {
+            const shouldReconnect =
+                lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log("❌ Verbindung geschlossen, erneuter Versuch...", shouldReconnect);
+            if (shouldReconnect) startBot();
         }
 
         if (connection === "open") {
-            console.log("✅ WhatsApp Bot متصل الآن!");
-        } else if (connection === "close") {
-            console.log("⚠️ انقطع الاتصال، إعادة المحاولة...");
-            startSock();
+            console.log("✅ Bot ist erfolgreich verbunden!");
         }
     });
 
-    // حفظ بيانات الجلسة
-    sock.ev.on("creds.update", saveCreds);
-
-    // الرد على "Jetzt starten"
-    sock.ev.on("messages.upsert", async (m) => {
-        const msg = m.messages[0];
+    // ---------------------------
+    // 4. الرد على رسالة البداية
+    // ---------------------------
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+        const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
-        const from = msg.key.remoteJid;
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+        const body = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
-        if (text.toLowerCase() === "jetzt starten") {
-            await sock.sendMessage(from, { text: "👋 Hallo! Dein DigiNetz WhatsApp Bot ist jetzt aktiv ✅" });
+        if (body && body.toLowerCase() === "jetzt starten") {
+            await sock.sendMessage(msg.key.remoteJid, {
+                text: "👋 Hallo! Dein DigiNetz-Bot ist jetzt verbunden ✅"
+            });
         }
     });
+
+    sock.ev.on("creds.update", saveCreds);
 }
 
-startSock();
+startBot();
