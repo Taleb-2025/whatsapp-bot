@@ -1,94 +1,74 @@
-require('dotenv').config();
-const express = require('express');
-const qrcode = require('qrcode');
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
-const P = require('pino');
-const fs = require('fs');
-const path = require('path');
-const { Boom } = require('@hapi/boom');
+// index.js - DigiNetz WhatsApp Bot on Railway
+
+require("dotenv").config();
+const express = require("express");
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const qrcode = require("qrcode");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const AUTH_FOLDER = './auth_info_diginetz';
 
-if (!fs.existsSync(AUTH_FOLDER)) {
-    fs.mkdirSync(AUTH_FOLDER);
-}
+let qrCodeData = "";
+let sock;
 
-let qrCodeData = null;
-
-// رابط مسح QR Code من المتصفح مباشرة
-app.get('/qr', async (req, res) => {
+// === إنشاء سيرفر Express لعرض QR Code كرابط ===
+app.get("/", (req, res) => {
     if (!qrCodeData) {
-        return res.send('<h2>⏳ في انتظار توليد QR Code ... أعد تحميل الصفحة بعد لحظات</h2>');
+        return res.send("<h2>⏳ انتظر قليلاً... يتم توليد QR Code الآن</h2>");
     }
-
-    try {
-        const qrImage = await qrcode.toDataURL(qrCodeData);
-        res.send(`
-            <div style="display:flex;justify-content:center;align-items:center;flex-direction:column;height:100vh;">
-                <h2>📱 امسح هذا الكود لتفعيل البوت</h2>
-                <img src="${qrImage}" />
-            </div>
-        `);
-    } catch (err) {
-        console.error('❌ خطأ في إنشاء QR Code:', err);
-        res.status(500).send('حدث خطأ أثناء إنشاء QR Code');
-    }
+    res.send(`
+        <h1>امسح QR Code لتفعيل البوت</h1>
+        <img src="${qrCodeData}" width="300" height="300" />
+    `);
 });
 
-async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
-    const { version } = await fetchLatestBaileysVersion();
+// === تشغيل السيرفر على Railway ===
+app.listen(PORT, () => {
+    console.log(`🌐 Server läuft auf: http://localhost:${PORT}`);
+});
 
-    const sock = makeWASocket({
+// === بدء الاتصال مع WhatsApp ===
+async function startSock() {
+    const { state, saveCreds } = await useMultiFileAuthState("auth_info_diginetz");
+
+    sock = makeWASocket({
         auth: state,
-        logger: P({ level: 'silent' }),
-        version,
+        printQRInTerminal: false // لن نعرض QR هنا بل على الرابط
     });
 
-    // حفظ الـ creds و keys تلقائيًا عند أي تحديث
-    sock.ev.on('creds.update', saveCreds);
+    // عند ظهور QR جديد → نحوله إلى صورة Base64 ونحفظه للعرض في الرابط
+    sock.ev.on("connection.update", async (update) => {
+        const { connection, qr } = update;
 
-    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
         if (qr) {
-            qrCodeData = qr;
-            console.log(`🌐 افتح هذا الرابط لمسح QR Code:\n`);
-            console.log(`${process.env.RAILWAY_STATIC_URL || `http://localhost:${PORT}`}/qr`);
+            qrCodeData = await qrcode.toDataURL(qr);
+            console.log("✅ QR Code جاهز → افتحه عبر الرابط في Railway Logs");
         }
 
-        if (connection === 'open') {
-            console.log('✅ تم الاتصال بنجاح مع WhatsApp!');
-        } else if (connection === 'close') {
-            const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) {
-                console.log('🔄 إعادة الاتصال...');
-                startBot();
-            } else {
-                console.log('🚪 تم تسجيل الخروج. أعد تشغيل البوت لمسح كود جديد.');
-            }
+        if (connection === "open") {
+            console.log("✅ WhatsApp Bot متصل الآن!");
+        } else if (connection === "close") {
+            console.log("⚠️ انقطع الاتصال، إعادة المحاولة...");
+            startSock();
         }
     });
 
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message) return;
+    // حفظ بيانات الجلسة
+    sock.ev.on("creds.update", saveCreds);
+
+    // الرد على "Jetzt starten"
+    sock.ev.on("messages.upsert", async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
         const from = msg.key.remoteJid;
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-        console.log(`📩 رسالة من ${from}: ${text}`);
-
-        if (text?.toLowerCase() === 'jetzt starten') {
-            await sock.sendMessage(from, { text: '👋 Hallo! Dein DigiNetz Bot ist jetzt aktiv ✅' });
+        if (text.toLowerCase() === "jetzt starten") {
+            await sock.sendMessage(from, { text: "👋 Hallo! Dein DigiNetz WhatsApp Bot ist jetzt aktiv ✅" });
         }
     });
 }
 
-startBot();
-
-app.listen(PORT, () => {
-    console.log(`🚀 DigiNetz Bot läuft auf Port ${PORT}`);
-    console.log(`🌐 افتح هذا الرابط لمسح QR Code:\n`);
-    console.log(`${process.env.RAILWAY_STATIC_URL || `http://localhost:${PORT}`}/qr`);
-});
+startSock();
