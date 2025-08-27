@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "postinstall": "npm install"
+    "postinstall": "npm install --force"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",
@@ -12,6 +12,10 @@
     "pino": "^9.0.0",
     "qrcode-terminal": "^0.12.0",
     "@hapi/boom": "^10.0.1",
-    "tar": "^7.4.3"
+    "tar": "^7.4.3",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
